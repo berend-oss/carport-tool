@@ -230,9 +230,14 @@
     { layers: "kadastralekaart", format: "image/png", transparent: true, maxZoom: 22 }
   );
 
+  const ahn4 = L.tileLayer.wms(
+    "https://service.pdok.nl/rws/ahn/wms/v1_0",
+    { layers: "dsm_05m", format: "image/png", transparent: true, maxZoom: 22, opacity: 0.65 }
+  );
+
   L.control.layers(
     { "PDOK Luchtfoto": pdokLuchtfoto, "OpenStreetMap": osm },
-    { "Perceelgrenzen (Kadaster)": pdokPercelen },
+    { "Perceelgrenzen (Kadaster)": pdokPercelen, "Hoogtekaart (AHN4)": ahn4 },
     { collapsed: true }
   ).addTo(map);
 
@@ -1524,7 +1529,37 @@
     applyStyles();
     updateTotals();
     updateSideButtons();
+
+    if (mode !== "delete") query3dBag(e.latlng);
   });
+
+  /* ===================== 3D BAG BUILDING HEIGHT ===================== */
+  async function query3dBag(latlng){
+    const d = 0.00006;
+    const bbox = `${latlng.lng-d},${latlng.lat-d},${latlng.lng+d},${latlng.lat+d}`;
+    try {
+      const res = await fetch(`https://api.3dbag.nl/collections/pand/items?bbox=${bbox}&f=json`);
+      const data = await res.json();
+      const feat = data?.features?.[0];
+      if (!feat) return;
+
+      const p = feat.properties;
+      const dak      = p.b3_h_dak_50p;
+      const maaiveld = p.b3_h_maaiveld_50p;
+      const hoogte   = (dak != null && maaiveld != null) ? (dak - maaiveld).toFixed(1) : "–";
+      const dakNAP   = dak != null ? dak.toFixed(1) : "–";
+
+      L.popup({ closeButton: true, className: "" })
+        .setLatLng(latlng)
+        .setContent(`
+          <div style="font-size:13px;line-height:1.6;">
+            <b>Gebouwhoogte</b><br>
+            Hoogte: <b>${hoogte} m</b><br>
+            Dakrand (NAP+): ${dakNAP} m
+          </div>`)
+        .openOn(map);
+    } catch {}
+  }
 
   /* ===================== Keyboard ===================== */
   document.addEventListener("keydown", (e) => {
