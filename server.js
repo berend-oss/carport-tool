@@ -37,7 +37,7 @@ app.get("/3dbag", async (req, res) => {
     const { bbox } = req.query;
     if (!bbox) return res.status(400).json({ error: "bbox ontbreekt" });
 
-    const url = `https://api.3dbag.nl/collections/pand/items?bbox=${encodeURIComponent(bbox)}&limit=1&f=json`;
+    const url = `https://api.3dbag.nl/collections/pand/items?bbox=${bbox}&limit=1&f=json`;
     const r = await fetch(url, { headers: { Accept: "application/geo+json" } });
     if (!r.ok) return res.status(502).send(await r.text());
 
