@@ -1,0 +1,1670 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Solar carports intekenen</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
+
+  <style>
+    html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    #map { height: 100vh; width: 100vw; }
+
+    .ui-card{
+      background: rgba(255,255,255,0.96);
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 14px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.10);
+      padding: 10px;
+      backdrop-filter: blur(6px);
+    }
+    .ui-title{ font-weight: 800; font-size: 13px; margin-bottom: 6px; }
+    .ui-row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .ui-row + .ui-row{ margin-top: 8px; }
+    .ui-small{ font-size:12px; color:#666; line-height:1.35; }
+    .ui-divider{ height:1px; background: rgba(0,0,0,0.08); margin: 8px 0; }
+
+    .btn{
+      border: 1px solid rgba(0,0,0,0.12);
+      background:#fff;
+      border-radius: 12px;
+      padding: 7px 9px;
+      font-size: 13px;
+      cursor:pointer;
+      user-select:none;
+      white-space: nowrap;
+    }
+    .btn:hover{ background:#f6f6f6; }
+    .btn.primary{ background:#1f4f99; border-color:#1f4f99; color:#fff; }
+    .btn.primary:hover{ background:#1b4586; }
+    .btn.danger{ background:#fff0f0; border-color:#ffb0b0; color:#7a0a0a; }
+    .btn.danger.active{ background:#ffd6d6; font-weight:800; }
+    .btn.active{ outline: 2px solid rgba(31,79,153,0.35); }
+
+    .pill{
+      display:inline-flex;
+      border: 1px solid rgba(0,0,0,0.12);
+      border-radius: 12px;
+      overflow:hidden;
+      background:#fff;
+    }
+    .pill button{
+      border:0;
+      background:transparent;
+      padding:7px 9px;
+      cursor:pointer;
+      font-size:13px;
+    }
+    .pill button.active{ background:#f0f0f0; font-weight:800; }
+
+    .input{
+      border: 1px solid rgba(0,0,0,0.12);
+      border-radius: 12px;
+      padding: 8px 10px;
+      font-size: 13px;
+      width: 100%;
+    }
+
+    .autocomplete-wrap{ position:relative; width:100%; }
+    .suggestions{
+      position:absolute;
+      left:0; right:0; top:40px;
+      z-index:9999;
+      background:#fff;
+      border:1px solid rgba(0,0,0,0.12);
+      border-radius:12px;
+      overflow:hidden;
+      box-shadow:0 10px 20px rgba(0,0,0,0.12);
+      display:none;
+      max-height:240px;
+      overflow-y:auto;
+    }
+    .suggestion{
+      padding:10px 12px;
+      cursor:pointer;
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+      font-size:14px;
+    }
+    .suggestion:hover{ background:#f6f6f6; }
+    .suggestion .sub{ font-size:12px; color:#666; margin-top:2px; }
+
+    .len-label{
+      background: rgba(0,0,0,0.78);
+      color: #fff;
+      border-radius: 10px;
+      padding: 6px 8px;
+      display:flex;
+      align-items:center;
+      gap:6px;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.22);
+      pointer-events: auto;
+    }
+    .len-label span{ font-size: 12px; opacity: 0.9; white-space: nowrap; }
+    .len-label input{
+      width: 48px;
+      border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(255,255,255,0.10);
+      color: #fff;
+      border-radius: 8px;
+      padding: 4px 6px;
+      font-size: 12px;
+      outline: none;
+      pointer-events: auto;
+    }
+
+    /* Leaflet.draw-like handle (white square) */
+    .draw-handle {
+      width: 14px;
+      height: 14px;
+      background: #fff;
+      border: 2px solid #111;
+      border-radius: 2px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+      position: relative;
+    }
+    .draw-handle .n{
+      position: absolute;
+      top: -18px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.82);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 900;
+      line-height: 1;
+      padding: 3px 6px;
+      border-radius: 10px;
+      white-space: nowrap;
+    }
+    .draw-handle.big{
+      width: 16px;
+      height: 16px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="passwordOverlay" style="
+  position:fixed; inset:0; z-index:99999;
+  background:rgba(15,23,42,0.92);
+  display:flex; align-items:center; justify-content:center;
+  backdrop-filter:blur(6px);
+">
+  <div style="
+    background:#fff; border-radius:18px;
+    padding:36px 40px; width:320px;
+    box-shadow:0 20px 60px rgba(0,0,0,0.35);
+    text-align:center;
+  ">
+    <div style="font-size:32px; margin-bottom:12px;">☀️</div>
+    <div style="font-weight:800; font-size:17px; margin-bottom:4px;">Solar Carport Tool</div>
+    <div style="font-size:13px; color:#666; margin-bottom:24px;">Voer het wachtwoord in om door te gaan.</div>
+    <input id="pwInput" type="password" placeholder="Wachtwoord" style="
+      width:100%; box-sizing:border-box;
+      border:1px solid rgba(0,0,0,0.15); border-radius:12px;
+      padding:10px 14px; font-size:15px; outline:none;
+      margin-bottom:10px;
+    "/>
+    <div id="pwError" style="color:#c0392b; font-size:12px; min-height:18px; margin-bottom:8px;"></div>
+    <button id="pwBtn" style="
+      width:100%; background:#1f4f99; color:#fff;
+      border:none; border-radius:12px;
+      padding:11px; font-size:14px; font-weight:700;
+      cursor:pointer;
+    ">Doorgaan</button>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+
+<script>
+  /* ===================== CONFIG ===================== */
+  const PANEL_LEN_M = 2.275;
+  const PANEL_WID_M = 1.4;
+  const PANELS_PER_ROW = 3;
+  const ROW_SPACING_M = 1.4;
+  const EXTRA_ROW_THRESHOLD_M = 0.6;
+
+  const CARPORT_PANEL_WP = 585;
+  const PERG_PANEL_WP = 540;
+
+  const PERG_PANEL_LEN_M = 2.0;
+  const PERG_PANEL_WID_M = 1.14;
+  const PERG_PAIR_LEN_M = 4.0;
+  const PERG_PAIR_WID_M = 1.14;
+
+  const PERG_EXTRA_THRESHOLD = 0.90;
+  const KWH_PER_KWP = 880;
+
+  const STYLE_LINE_NORMAL   = { color: "#1f4f99", weight: 3, opacity: 0.9 };
+  const STYLE_LINE_SELECTED = { color: "#ff8c00", weight: 6, opacity: 0.98 };
+
+  const STYLE_PANEL_NORMAL   = { weight: 1, opacity: 0.8, fillOpacity: 0.12, color: "#1f4f99" };
+  const STYLE_PANEL_SELECTED = { weight: 2, opacity: 0.95, fillOpacity: 0.25, color: "#ff8c00" };
+  const STYLE_PANEL_OVERLAP  = { weight: 2, opacity: 0.95, fillOpacity: 0.35, color: "#d60000" };
+
+  const STYLE_PERGOLA_NORMAL   = { color: "#1f4f99", weight: 2, opacity: 0.9, fillOpacity: 0.03 };
+  const STYLE_PERGOLA_SELECTED = { color: "#ff8c00", weight: 4, opacity: 0.98, fillOpacity: 0.06 };
+
+  const STYLE_PREVIEW_LINE = { color: "#1f4f99", weight: 2, opacity: 0.7, dashArray: "6,6" };
+  const STYLE_PREVIEW_RECT = { color: "#1f4f99", weight: 2, opacity: 0.7, fillOpacity: 0.02, dashArray: "6,6" };
+
+  /* ===================== MAP ===================== */
+  const map = L.map('map', { keyboard: true, zoomControl: true }).setView([52.1326, 5.2913], 10);
+  map.zoomControl.setPosition('topright');
+
+  const pdokLuchtfoto = L.tileLayer.wms(
+    "https://service.pdok.nl/hwh/luchtfotorgb/wms/v1_0",
+    { layers: "Actueel_ortho25", format: "image/png", transparent: false, maxZoom: 22 }
+  ).addTo(map);
+
+  const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 20 });
+  const pdokPercelen = L.tileLayer.wms(
+    "https://service.pdok.nl/kadaster/kadastralekaart/wms/v5_0",
+    { layers: "kadastralekaart", format: "image/png", transparent: true, maxZoom: 22 }
+  );
+
+  L.control.layers(
+    { "PDOK Luchtfoto": pdokLuchtfoto, "OpenStreetMap": osm },
+    { "Perceelgrenzen (Kadaster)": pdokPercelen },
+    { collapsed: true }
+  ).addTo(map);
+
+  // Remove middle edit markers globally (carports)
+  if (L.Edit && L.Edit.PolyVerticesEdit) {
+    L.Edit.PolyVerticesEdit.prototype._createMiddleMarker = function () { return null; };
+    L.Edit.PolyVerticesEdit.prototype._updateMiddleMarkers = function () {};
+  }
+
+  /* ===================== GROUPS ===================== */
+  const carportLines = new L.FeatureGroup().addTo(map);
+  const panelGroups = new Map();
+  const carports = new Map();
+
+  const pergolaShapes = new L.FeatureGroup().addTo(map);
+  const pergolaPanels = new Map();
+  const pergolas = new Map(); // id -> { layer, A, B, lengthSignedM }
+
+  const lengthLabelLayer = L.layerGroup().addTo(map);
+  const pergolaUiLayer = L.layerGroup().addTo(map);
+
+  const pergolaPreviewLayer = L.layerGroup().addTo(map);
+  const pergolaDrawMarkerLayer = L.layerGroup().addTo(map);
+  let previewLine = null;
+  let previewRect = null;
+
+  const overlappedPanelIds = new Set();
+
+  /* ===================== STATE ===================== */
+  let carportIdCounter = 1;
+  let pergolaIdCounter = 1;
+
+  let selectedCarportId = null;
+  let selectedPergolaId = null;
+
+  let mode = "select"; // select | delete
+  let adjustOn = false;
+
+  let suppressNextMapClick = false;
+
+  const pergolaDraw = { active:false, step:0, A:null, B:null, snappedC:null, mA:null, mB:null, mC:null };
+
+  /* ===================== UI ===================== */
+  const UI = {};
+
+  const AddressControl = L.Control.extend({
+    options: { position: "topleft" },
+    onAdd: function(){
+      const div = L.DomUtil.create("div", "ui-card");
+      div.style.width = "320px";
+      div.innerHTML = `
+        <div class="ui-title">Zoek adres</div>
+        <div class="autocomplete-wrap">
+          <input id="uiAddress" class="input" placeholder="Typ een adres (PDOK)..." autocomplete="off"/>
+          <div id="uiSuggestions" class="suggestions"></div>
+        </div>
+      `;
+      L.DomEvent.disableClickPropagation(div);
+      L.DomEvent.disableScrollPropagation(div);
+      return div;
+    }
+  });
+  map.addControl(new AddressControl());
+
+  const ToolboxControl = L.Control.extend({
+    options: { position: "bottomright" },
+    onAdd: function(){
+      const div = L.DomUtil.create("div", "ui-card");
+      div.style.width = "320px";
+      div.innerHTML = `
+        <div class="ui-title">Solar carports</div>
+
+        <div class="ui-row">
+          <button id="uiDraw" class="btn primary" type="button">✏️ Teken Luifel</button>
+          <button id="uiDrawPergola" class="btn primary" type="button">🟦 Teken Pergola</button>
+        </div>
+
+        <div class="ui-row">
+          <button id="uiDelete" class="btn danger" type="button">🗑️ Verwijder</button>
+          <button id="uiClear" class="btn" type="button">🧹 Alles</button>
+        </div>
+
+        <div class="ui-divider"></div>
+
+        <div class="ui-row">
+          <div>
+            <div class="ui-small" style="margin-bottom:6px;">Zijde (geselecteerde carport)</div>
+            <div class="pill">
+              <button id="uiSideLeft" type="button">Links</button>
+              <button id="uiSideRight" type="button">Rechts</button>
+              <button id="uiSideBoth" type="button">Beide</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="ui-divider"></div>
+
+        <div class="ui-row">
+          <div class="ui-small" id="uiTotals"></div>
+        </div>
+      `;
+      L.DomEvent.disableClickPropagation(div);
+      L.DomEvent.disableScrollPropagation(div);
+      return div;
+    }
+  });
+  map.addControl(new ToolboxControl());
+
+  UI.drawBtn        = document.getElementById("uiDraw");
+  UI.drawPergolaBtn = document.getElementById("uiDrawPergola");
+  UI.deleteBtn      = document.getElementById("uiDelete");
+  UI.clearBtn       = document.getElementById("uiClear");
+
+  UI.addrInput = document.getElementById("uiAddress");
+  UI.suggEl    = document.getElementById("uiSuggestions");
+
+  UI.sideLeft  = document.getElementById("uiSideLeft");
+  UI.sideRight = document.getElementById("uiSideRight");
+  UI.sideBoth  = document.getElementById("uiSideBoth");
+
+  UI.totalsEl  = document.getElementById("uiTotals");
+
+  function setMode(newMode){
+    mode = newMode;
+    UI.deleteBtn.classList.toggle("active", mode === "delete");
+    map.getContainer().style.cursor = (mode === "delete") ? "not-allowed" : "";
+
+    if (mode === "delete"){
+      stopPergolaDraw();
+      adjustOn = false;
+      carportDisableAllEdits();
+      pergolaClearUi();
+      carportRenderLengthLabel();
+    } else {
+      carportSyncEditingState();
+      pergolaSyncUi(false);
+    }
+  }
+
+  function updateSideButtons(){
+    const cp = selectedCarportId ? carports.get(selectedCarportId) : null;
+    const modeVal = cp ? cp.sideMode : "left";
+    UI.sideLeft.classList.toggle("active", modeVal === "left");
+    UI.sideRight.classList.toggle("active", modeVal === "right");
+    UI.sideBoth.classList.toggle("active", modeVal === "both");
+  }
+
+  function updateSelectedSide(modeVal){
+    if (!selectedCarportId) return;
+    const cp = carports.get(selectedCarportId);
+    cp.sideMode = modeVal;
+    rebuildAllPanelsAndOverlaps();
+    updateSideButtons();
+  }
+  UI.sideLeft.onclick  = () => updateSelectedSide("left");
+  UI.sideRight.onclick = () => updateSelectedSide("right");
+  UI.sideBoth.onclick  = () => updateSelectedSide("both");
+
+  UI.deleteBtn.onclick = () => setMode(mode === "delete" ? "select" : "delete");
+
+  /* ===================== HELPERS ===================== */
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    }[c]));
+  }
+  function fmtNlInt(n){
+    return Number(Math.round(n)).toLocaleString("nl-NL");
+  }
+
+  function bearingBetweenLL(aLL, bLL){
+    return turf.bearing(turf.point([aLL.lng, aLL.lat]), turf.point([bLL.lng, bLL.lat]));
+  }
+  function distanceM(aLL, bLL){
+    return turf.distance(turf.point([aLL.lng, aLL.lat]), turf.point([bLL.lng, bLL.lat]), {units:"meters"});
+  }
+  function destinationFromLL(aLL, distM, bearingDeg){
+    const out = turf.destination(turf.point([aLL.lng, aLL.lat]), distM, bearingDeg, { units: "meters" }).geometry.coordinates;
+    return L.latLng(out[1], out[0]);
+  }
+
+  function proj(ll){ return L.Projection.SphericalMercator.project(ll); }
+  function unproj(p){ return L.Projection.SphericalMercator.unproject(p); }
+  function unitAlong(A, B){
+    const a = proj(A), b = proj(B);
+    const vx = b.x - a.x, vy = b.y - a.y;
+    const Lm = Math.hypot(vx, vy) || 1;
+    return { ux: vx/Lm, uy: vy/Lm, Lm };
+  }
+  function perpLeft(u){ return { px: -u.uy, py: u.ux }; }
+
+  // sign from projection, magnitude in real meters (turf.distance)
+  function constrainPerpThroughBase(A, B, P, basePointLL){
+    const base = proj(basePointLL);
+    const p = proj(P);
+    const u = unitAlong(A, B);
+    const n = perpLeft(u);
+
+    const bpx = p.x - base.x, bpy = p.y - base.y;
+    const signedProj = bpx * n.px + bpy * n.py;
+
+    const cx = base.x + n.px * signedProj;
+    const cy = base.y + n.py * signedProj;
+    const constrainedLatLng = unproj({x: cx, y: cy});
+
+    const meters = turf.distance(
+      turf.point([basePointLL.lng, basePointLL.lat]),
+      turf.point([constrainedLatLng.lng, constrainedLatLng.lat]),
+      { units: "meters" }
+    );
+
+    const sign = signedProj >= 0 ? 1 : -1;
+    return { constrainedLatLng, signedMeters: sign * meters };
+  }
+
+  function rectFromCenter(centerLonLat, alongBearingDeg, alongMeters, perpBearingDeg, perpMeters){
+    const halfAlong = alongMeters / 2;
+    const halfPerp  = perpMeters  / 2;
+
+    const c0 = turf.destination(turf.destination(turf.point(centerLonLat), halfAlong, alongBearingDeg, {units:"meters"}), halfPerp,  perpBearingDeg, {units:"meters"}).geometry.coordinates;
+    const c1 = turf.destination(turf.destination(turf.point(centerLonLat), halfAlong, alongBearingDeg, {units:"meters"}), halfPerp,  perpBearingDeg+180, {units:"meters"}).geometry.coordinates;
+    const c2 = turf.destination(turf.destination(turf.point(centerLonLat), halfAlong, alongBearingDeg+180, {units:"meters"}), halfPerp,  perpBearingDeg+180, {units:"meters"}).geometry.coordinates;
+    const c3 = turf.destination(turf.destination(turf.point(centerLonLat), halfAlong, alongBearingDeg+180, {units:"meters"}), halfPerp,  perpBearingDeg, {units:"meters"}).geometry.coordinates;
+
+    return [[c0[1], c0[0]],[c1[1], c1[0]],[c2[1], c2[0]],[c3[1], c3[0]]];
+  }
+
+  function makeDrawHandleIcon(n){
+    return L.divIcon({
+      className: "",
+      html: `<div class="draw-handle big"><div class="n">${n}</div></div>`,
+      iconSize: [16, 16],
+      iconAnchor: [8, 8]
+    });
+  }
+
+  /* ===================== OVERLAP ===================== */
+  function bboxIntersects(b1, b2){
+    return !(b2[0] > b1[2] || b2[2] < b1[0] || b2[1] > b1[3] || b2[3] < b1[1]);
+  }
+
+  function collectAllPanels(){
+    const panels = [];
+    for (const g of panelGroups.values()) g.eachLayer(layer => panels.push(layer));
+    for (const g of pergolaPanels.values()) g.eachLayer(layer => panels.push(layer));
+    return panels;
+  }
+
+  function recomputeOverlaps(){
+    overlappedPanelIds.clear();
+    const panels = collectAllPanels();
+    if (panels.length < 2) return;
+
+    const items = panels.map(p => {
+      const gj = p.toGeoJSON();
+      return { panelId: p._panelId, ownerType: p._panelOwnerType, ownerId: p._panelOwnerId, gj, bbox: turf.bbox(gj) };
+    });
+
+    for (let i = 0; i < items.length; i++){
+      for (let j = i + 1; j < items.length; j++){
+        const a = items[i], b = items[j];
+        if (a.ownerType === b.ownerType && a.ownerId === b.ownerId) continue;
+        if (!bboxIntersects(a.bbox, b.bbox)) continue;
+        try{
+          if (turf.booleanIntersects(a.gj, b.gj)){
+            overlappedPanelIds.add(a.panelId);
+            overlappedPanelIds.add(b.panelId);
+          }
+        }catch{}
+      }
+    }
+  }
+
+  /* ===================== STYLES + TOTALS ===================== */
+  function applyStyles(){
+    for (const [id, cp] of carports.entries()){
+      cp.layer.setStyle(id === selectedCarportId ? STYLE_LINE_SELECTED : STYLE_LINE_NORMAL);
+    }
+    for (const [id, pg] of pergolas.entries()){
+      pg.layer.setStyle(id === selectedPergolaId ? STYLE_PERGOLA_SELECTED : STYLE_PERGOLA_NORMAL);
+    }
+
+    const stylePanelsInGroup = (group, ownerType, ownerId) => {
+      group.eachLayer(layer => {
+        const pid = layer._panelId;
+        if (overlappedPanelIds.has(pid)) { layer.setStyle(STYLE_PANEL_OVERLAP); return; }
+
+        const isSel =
+          (ownerType === "carport" && ownerId === selectedCarportId) ||
+          (ownerType === "pergola" && ownerId === selectedPergolaId);
+
+        layer.setStyle(isSel ? STYLE_PANEL_SELECTED : STYLE_PANEL_NORMAL);
+      });
+    };
+
+    for (const [id, g] of panelGroups.entries()) stylePanelsInGroup(g, "carport", id);
+    for (const [id, g] of pergolaPanels.entries()) stylePanelsInGroup(g, "pergola", id);
+  }
+
+  function computeCarportStats(carportId){
+    const cp = carports.get(carportId);
+    if (!cp) return { panels: 0, kwp: 0 };
+
+    const gj = cp.layer.toGeoJSON();
+    const lenM = turf.length(gj, {units:"kilometers"}) * 1000;
+    const base = Math.floor(lenM / ROW_SPACING_M);
+    const rest = lenM - base * ROW_SPACING_M;
+    const rows = base + (rest > EXTRA_ROW_THRESHOLD_M ? 1 : 0);
+
+    const sides = cp.sideMode === "both" ? 2 : 1;
+    const panels = rows * PANELS_PER_ROW * sides;
+    const kwp = (panels * CARPORT_PANEL_WP) / 1000;
+    return { panels, kwp };
+  }
+
+  function computePergolaStats(pergolaId){
+    const g = pergolaPanels.get(pergolaId);
+    if (!g) return { panels: 0, kwp: 0 };
+    let panels = 0;
+    g.eachLayer(() => panels++);
+    const kwp = (panels * PERG_PANEL_WP) / 1000;
+    return { panels, kwp };
+  }
+
+  function updateTotals(){
+    const carportCount = carports.size;
+    const pergolaCount = pergolas.size;
+
+    let totalPanels = 0;
+    let totalKwp = 0;
+
+    for (const [id] of carports.entries()){
+      const st = computeCarportStats(id);
+      totalPanels += st.panels;
+      totalKwp += st.kwp;
+    }
+    for (const [id] of pergolas.entries()){
+      const st = computePergolaStats(id);
+      totalPanels += st.panels;
+      totalKwp += st.kwp;
+    }
+
+    const expectedKwh = totalKwp * KWH_PER_KWP;
+
+    let selectedLine = "Geen selectie.";
+    if (selectedCarportId){
+      const st = computeCarportStats(selectedCarportId);
+      selectedLine = `Carport ${selectedCarportId}: ${st.panels} panelen • ${st.kwp.toFixed(2)} kWp`;
+    } else if (selectedPergolaId){
+      const st = computePergolaStats(selectedPergolaId);
+      selectedLine = `Pergola ${selectedPergolaId}: ${st.panels} panelen • ${st.kwp.toFixed(2)} kWp`;
+    }
+
+    UI.totalsEl.innerHTML = `
+      <div class="ui-small" style="margin-bottom:6px;"><b>${selectedLine}</b></div>
+      <div><b>${carportCount}</b> carports • <b>${pergolaCount}</b> pergola’s</div>
+      <div><b>${totalPanels}</b> panelen • <b>${totalKwp.toFixed(2)}</b> kWp</div>
+      <div><b>Verwachte opbrengst:</b> ${fmtNlInt(expectedKwh)} kWh/jaar</div>
+    `;
+  }
+
+  function rebuildAllPanelsAndOverlaps(){
+    for (const [id] of carports.entries()) carportRedrawPanels(id);
+    for (const [id] of pergolas.entries()) pergolaRedrawPanels(id);
+
+    recomputeOverlaps();
+    applyStyles();
+    updateTotals();
+
+    carportRenderLengthLabel();
+    pergolaSyncUi(true);
+
+    if (adjustOn && selectedCarportId && mode !== "delete") {
+      const layer = carports.get(selectedCarportId)?.layer;
+      carportRemoveMiddleMarkersRuntime(layer);
+      carportApplyEndpointNumbering(layer);
+    }
+  }
+
+  /* ============================================================
+     ===================== CARPORTS ==============================
+     ============================================================ */
+
+  function carportEnsurePanelGroup(carportId){
+    if (!panelGroups.has(carportId)){
+      const g = L.featureGroup().addTo(map);
+      panelGroups.set(carportId, g);
+    }
+    return panelGroups.get(carportId);
+  }
+  function carportClearPanelGroup(carportId){
+    const g = panelGroups.get(carportId);
+    if (g) g.clearLayers();
+  }
+
+  function carportGeneratePanels(carportId){
+    const cp = carports.get(carportId);
+    if (!cp) return;
+
+    const lineGJ = cp.layer.toGeoJSON();
+    const lenM = turf.length(lineGJ, {units:"kilometers"}) * 1000;
+    const coords = lineGJ.geometry.coordinates;
+    const bearing = turf.bearing(turf.point(coords[0]), turf.point(coords[coords.length-1]));
+
+    const base = Math.floor(lenM / ROW_SPACING_M);
+    const rest = lenM - base * ROW_SPACING_M;
+    const rows = base + (rest > EXTRA_ROW_THRESHOLD_M ? 1 : 0);
+
+    const group = carportEnsurePanelGroup(carportId);
+    group.clearLayers();
+    if (rows <= 0) return;
+
+    const sides = (cp.sideMode === "both") ? ["left","right"] : [cp.sideMode];
+
+    for (const side of sides){
+      const sign = (side === "right") ? 1 : -1;
+      const perp = bearing + sign * 90;
+
+      for (let i = 0; i < rows; i++){
+        const d = (ROW_SPACING_M / 2) + i * ROW_SPACING_M;
+        const p = turf.along(lineGJ, d, {units:"meters"}).geometry.coordinates;
+
+        for (let k = 0; k < PANELS_PER_ROW; k++){
+          const offset = (k + 0.5) * PANEL_LEN_M;
+          const center = turf.destination(turf.point(p), offset, perp, {units:"meters"}).geometry.coordinates;
+          const corners = rectFromCenter(center, bearing, PANEL_WID_M, perp, PANEL_LEN_M);
+
+          const poly = L.polygon(corners, STYLE_PANEL_NORMAL);
+          poly._panelOwnerType = "carport";
+          poly._panelOwnerId = carportId;
+          poly._panelId = `C:${carportId}:${side}:${i}:${k}`;
+
+          poly.on("click", (evt) => {
+            L.DomEvent.stopPropagation(evt);
+            if (mode === "delete") carportDelete(carportId);
+            else carportSelect(carportId);
+          });
+
+          group.addLayer(poly);
+        }
+      }
+    }
+  }
+  function carportRedrawPanels(carportId){
+    carportClearPanelGroup(carportId);
+    carportGeneratePanels(carportId);
+  }
+
+  function carportAttachEvents(layer, id){
+    layer.on("click", (evt) => {
+      L.DomEvent.stopPropagation(evt);
+      if (mode === "delete") carportDelete(id);
+      else carportSelect(id);
+    });
+  }
+
+  const TwoPointPolyline = L.Draw.Polyline.extend({
+    addVertex: function(latlng){
+      L.Draw.Polyline.prototype.addVertex.call(this, latlng);
+      if (this._markers && this._markers.length === 2) this._finishShape();
+    }
+  });
+
+  // Leaflet.draw tooltip teksten (Carport lijn tekenen)
+  L.drawLocal.draw.handlers.polyline.tooltip.start = "Klik om te starten met tekenen van de carport-lijn.";
+  L.drawLocal.draw.handlers.polyline.tooltip.cont  = "Klik om het eindpunt te zetten.";
+  L.drawLocal.draw.handlers.polyline.tooltip.end   = "Klik op het laatste punt om te stoppen.";
+
+  UI.drawBtn.onclick = () => {
+    setMode("select");
+    stopPergolaDraw();
+    adjustOn = false;
+    carportDisableAllEdits();
+    pergolaClearUi();
+    carportRenderLengthLabel();
+    new TwoPointPolyline(map, { shapeOptions: STYLE_LINE_NORMAL }).enable();
+  };
+
+  function carportReplaceLineLayer(carportId, newLatLngs){
+    const cp = carports.get(carportId);
+    if (!cp) return;
+
+    try { if (cp.layer.editing && cp.layer.editing.enabled()) cp.layer.editing.disable(); } catch {}
+    cp.layer.off("edit");
+    cp.layer.off("click");
+
+    carportLines.removeLayer(cp.layer);
+
+    const isSel = (carportId === selectedCarportId);
+    const newLayer = L.polyline(newLatLngs, isSel ? STYLE_LINE_SELECTED : STYLE_LINE_NORMAL);
+    newLayer._carportId = carportId;
+    carportAttachEvents(newLayer, carportId);
+
+    cp.layer = newLayer;
+    carportLines.addLayer(newLayer);
+
+    if (isSel && adjustOn && mode !== "delete") carportEnableEditForSelected();
+  }
+
+  function carportGetEditMarkerGroup(layer){
+    return (layer?.editing && (layer.editing._markerGroup || layer.editing._poly?._markerGroup)) || null;
+  }
+  function carportRemoveMiddleMarkersRuntime(layer){
+    try{
+      const mg = carportGetEditMarkerGroup(layer);
+      if (!mg) return;
+      const rm = [];
+      mg.eachLayer(m => { if (m && m._middle) rm.push(m); });
+      rm.forEach(m => mg.removeLayer(m));
+    } catch {}
+  }
+  function carportDist2(a, b){
+    const dx = a.lat - b.lat;
+    const dy = a.lng - b.lng;
+    return dx*dx + dy*dy;
+  }
+  function carportApplyEndpointNumbering(layer){
+    try{
+      const mg = carportGetEditMarkerGroup(layer);
+      if (!mg) return;
+
+      const ll = layer.getLatLngs();
+      if (!ll || ll.length < 2) return;
+      const start = ll[0];
+      const end   = ll[1];
+
+      const markers = [];
+      mg.eachLayer(m => {
+        if (!m || m._middle) return;
+        if (typeof m.getLatLng !== "function") return;
+        markers.push(m);
+      });
+      if (markers.length < 2) return;
+
+      let mStart = null, mEnd = null;
+      let bestS = Infinity, bestE = Infinity;
+
+      for (const m of markers){
+        const p = m.getLatLng();
+        const ds = carportDist2(p, start);
+        const de = carportDist2(p, end);
+        if (ds < bestS) { bestS = ds; mStart = m; }
+        if (de < bestE) { bestE = de; mEnd = m; }
+      }
+      if (!mStart || !mEnd) return;
+      // (Geen icon-wijziging; je wil de draw-markers behouden.)
+    } catch {}
+  }
+
+  function carportDisableAllEdits(){
+    for (const [, cp] of carports.entries()){
+      try { if (cp.layer.editing && cp.layer.editing.enabled()) cp.layer.editing.disable(); } catch {}
+      cp.layer.off("edit");
+    }
+  }
+
+  function carportEnableEditForSelected(){
+    carportDisableAllEdits();
+    if (!selectedCarportId) return;
+
+    const cp = carports.get(selectedCarportId);
+    if (!cp) return;
+
+    try { cp.layer.editing.enable(); } catch {}
+
+    carportRemoveMiddleMarkersRuntime(cp.layer);
+    setTimeout(() => { carportRemoveMiddleMarkersRuntime(cp.layer); }, 0);
+
+    cp.layer.off("edit");
+    cp.layer.on("edit", () => {
+      rebuildAllPanelsAndOverlaps();
+      carportRemoveMiddleMarkersRuntime(cp.layer);
+    });
+  }
+
+  function carportSyncEditingState(){
+    if (!adjustOn || mode === "delete" || !selectedCarportId) {
+      carportDisableAllEdits();
+      return;
+    }
+    carportEnableEditForSelected();
+  }
+
+  function carportApplyLength(newLenM){
+    if (!selectedCarportId) return;
+    const cp = carports.get(selectedCarportId);
+    if (!cp) return;
+
+    const ll = cp.layer.getLatLngs();
+    if (!ll || ll.length < 2) return;
+
+    const start = ll[0];
+    const end   = ll[1];
+    const bearing = bearingBetweenLL(start, end);
+
+    const len = Math.max(0, Number(newLenM) || 0);
+    const newEnd = destinationFromLL(start, len, bearing);
+
+    carportReplaceLineLayer(selectedCarportId, [start, newEnd]);
+    rebuildAllPanelsAndOverlaps();
+  }
+
+  function carportRenderLengthLabel(){
+    lengthLabelLayer.clearLayers();
+    if (!selectedCarportId) return;
+
+    const cp = carports.get(selectedCarportId);
+    if (!cp) return;
+
+    const gj = cp.layer.toGeoJSON();
+    const coords = gj.geometry.coordinates;
+    if (!coords || coords.length < 2) return;
+
+    const a = coords[0];
+    const b = coords[1];
+    const lenM = turf.distance(turf.point(a), turf.point(b), {units:"meters"});
+    const mid = turf.midpoint(turf.point(a), turf.point(b)).geometry.coordinates;
+
+    const inputId = `len-input-${selectedCarportId}`;
+    const html = `
+      <div class="len-label">
+        <span>Lengte</span>
+        <input id="${inputId}" inputmode="decimal" type="number" step="0.1" min="0"
+               value="${lenM.toFixed(1)}" ${adjustOn && mode !== "delete" ? "" : "disabled"} />
+        <span>m</span>
+      </div>
+    `;
+
+    const marker = L.marker([mid[1], mid[0]], {
+      interactive: true,
+      keyboard: false,
+      icon: L.divIcon({ className: "", html, iconSize: [160, 34] })
+    });
+
+    marker.on("click", (e) => {
+      L.DomEvent.stopPropagation(e);
+      if (selectedCarportId) carportSelect(selectedCarportId);
+    });
+    lengthLabelLayer.addLayer(marker);
+
+    setTimeout(() => {
+      const inp = document.getElementById(inputId);
+      if (!inp) return;
+
+      const stop = (ev) => ev.stopPropagation();
+      ["mousedown","mouseup","click","dblclick","keydown","wheel","touchstart","pointerdown"].forEach(evt =>
+        inp.addEventListener(evt, stop, { passive: evt === "touchstart" || evt === "wheel" })
+      );
+
+      const apply = () => {
+        const v = parseFloat(inp.value);
+        if (isFinite(v)) carportApplyLength(v);
+      };
+
+      inp.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { apply(); inp.blur(); } });
+      inp.addEventListener("change", apply);
+      inp.addEventListener("blur", apply);
+    }, 0);
+  }
+
+  function carportSelect(id){
+    selectedPergolaId = null;
+    pergolaClearUi();
+    stopPergolaDraw();
+
+    selectedCarportId = id;
+    if (mode !== "delete") adjustOn = true;
+
+    carportSyncEditingState();
+    carportRenderLengthLabel();
+    rebuildAllPanelsAndOverlaps();
+    updateSideButtons();
+  }
+
+  function carportDelete(carportId){
+    const cp = carports.get(carportId);
+    if (!cp) return;
+
+    try { if (cp.layer.editing && cp.layer.editing.enabled()) cp.layer.editing.disable(); } catch {}
+    cp.layer.off("edit");
+    cp.layer.off("click");
+    carportLines.removeLayer(cp.layer);
+
+    const g = panelGroups.get(carportId);
+    if (g) { g.clearLayers(); map.removeLayer(g); }
+    panelGroups.delete(carportId);
+
+    carports.delete(carportId);
+
+    if (selectedCarportId === carportId){
+      selectedCarportId = null;
+      lengthLabelLayer.clearLayers();
+      adjustOn = false;
+      carportDisableAllEdits();
+    }
+
+    rebuildAllPanelsAndOverlaps();
+    updateSideButtons();
+  }
+
+  map.on(L.Draw.Event.CREATED, (e) => {
+    const layer = e.layer;
+    layer.setStyle(STYLE_LINE_NORMAL);
+    carportLines.addLayer(layer);
+
+    const id = String(carportIdCounter++);
+    layer._carportId = id;
+
+    carports.set(id, { layer, sideMode: "left" });
+    carportAttachEvents(layer, id);
+
+    carportSelect(id);
+  });
+
+  /* ============================================================
+     ===================== PERGOLA ===============================
+     ============================================================ */
+
+  function pergolaEnsurePanelGroup(pergolaId){
+    if (!pergolaPanels.has(pergolaId)){
+      const g = L.featureGroup().addTo(map);
+      pergolaPanels.set(pergolaId, g);
+    }
+    return pergolaPanels.get(pergolaId);
+  }
+  function pergolaClearPanelGroup(pergolaId){
+    const g = pergolaPanels.get(pergolaId);
+    if (g) g.clearLayers();
+  }
+
+  function pergolaCorners(A, B, lengthSignedM){
+    const bearing = bearingBetweenLL(A, B);
+    const perpBearing = (lengthSignedM >= 0) ? (bearing - 90) : (bearing + 90);
+    const Labs = Math.abs(lengthSignedM);
+
+    const C = destinationFromLL(B, Labs, perpBearing);
+    const D = destinationFromLL(A, Labs, perpBearing);
+
+    return { A, B, C, D, bearing, perpBearing, lengthAbs: Labs };
+  }
+
+  function pergolaColsRowsWith90Rule(baselineM, lengthM){
+    let cols = Math.floor(baselineM / PERG_PAIR_LEN_M);
+    let remX = baselineM - cols * PERG_PAIR_LEN_M;
+    if (remX >= PERG_EXTRA_THRESHOLD * PERG_PAIR_LEN_M) cols += 1;
+
+    let rows = Math.floor(lengthM / PERG_PAIR_WID_M);
+    let remY = lengthM - rows * PERG_PAIR_WID_M;
+    if (remY >= PERG_EXTRA_THRESHOLD * PERG_PAIR_WID_M) rows += 1;
+
+    return { cols, rows };
+  }
+
+  function pergolaUpdatePolygonAndState(pergolaId, A, B, lengthSignedM){
+    const pg = pergolas.get(pergolaId);
+    if (!pg) return;
+
+    pg.A = A;
+    pg.B = B;
+    pg.lengthSignedM = lengthSignedM;
+
+    const { A:AA, B:BB, C, D } = pergolaCorners(A, B, lengthSignedM);
+    pg.layer.setLatLngs([AA, BB, C, D]);
+
+    pergolaRedrawPanels(pergolaId);
+    recomputeOverlaps();
+    applyStyles();
+    updateTotals();
+    pergolaSyncUi(true);
+  }
+
+  function pergolaCreate(A, B, lengthSignedM){
+    const id = String(pergolaIdCounter++);
+    const { A:AA, B:BB, C, D } = pergolaCorners(A, B, lengthSignedM);
+
+    const poly = L.polygon([AA, BB, C, D], STYLE_PERGOLA_NORMAL);
+    poly._pergolaId = id;
+
+    pergolas.set(id, { layer: poly, A: AA, B: BB, lengthSignedM });
+
+    poly.on("click", (evt) => {
+      L.DomEvent.stopPropagation(evt);
+      if (mode === "delete") pergolaDelete(id);
+      else pergolaSelect(id);
+    });
+
+    pergolaShapes.addLayer(poly);
+    pergolaRedrawPanels(id);
+
+    return id;
+  }
+
+  function pergolaGeneratePanels(pergolaId){
+    const pg = pergolas.get(pergolaId);
+    if (!pg) return;
+
+    const { A, B, C, bearing, perpBearing } = pergolaCorners(pg.A, pg.B, pg.lengthSignedM);
+
+    const breedte = distanceM(A, B); // AB
+    const lengte  = distanceM(B, C); // BC
+
+    const { cols, rows } = pergolaColsRowsWith90Rule(breedte, lengte);
+
+    const group = pergolaEnsurePanelGroup(pergolaId);
+    group.clearLayers();
+    if (cols <= 0 || rows <= 0) return;
+
+    for (let r = 0; r < rows; r++){
+      const rowCenter = (r + 0.5) * PERG_PAIR_WID_M;
+
+      for (let c = 0; c < cols; c++){
+        const cellCenterDist = (c + 0.5) * PERG_PAIR_LEN_M;
+
+        const cellCenter = turf.destination(
+          turf.destination(turf.point([A.lng, A.lat]), cellCenterDist, bearing, {units:"meters"}),
+          rowCenter, perpBearing, {units:"meters"}
+        ).geometry.coordinates;
+
+        for (let k = 0; k < 2; k++){
+          const sign = (k === 0) ? -1 : 1;
+          const center = turf.destination(
+            turf.point(cellCenter),
+            sign * (PERG_PANEL_LEN_M / 2),
+            bearing,
+            {units:"meters"}
+          ).geometry.coordinates;
+
+          const corners = rectFromCenter(center, bearing, PERG_PANEL_LEN_M, perpBearing, PERG_PANEL_WID_M);
+
+          const poly = L.polygon(corners, STYLE_PANEL_NORMAL);
+          poly._panelOwnerType = "pergola";
+          poly._panelOwnerId = pergolaId;
+          poly._panelId = `P:${pergolaId}:R${r}:C${c}:K${k}`;
+
+          poly.on("click", (evt) => {
+            L.DomEvent.stopPropagation(evt);
+            if (mode === "delete") pergolaDelete(pergolaId);
+            else pergolaSelect(pergolaId);
+          });
+
+          group.addLayer(poly);
+        }
+      }
+    }
+  }
+
+  function pergolaRedrawPanels(pergolaId){
+    pergolaClearPanelGroup(pergolaId);
+    pergolaGeneratePanels(pergolaId);
+  }
+
+  function pergolaSelect(id){
+    selectedCarportId = null;
+    adjustOn = false;
+    carportDisableAllEdits();
+    carportRenderLengthLabel();
+    stopPergolaDraw();
+
+    selectedPergolaId = id;
+    pergolaSyncUi(false);
+    rebuildAllPanelsAndOverlaps();
+    updateSideButtons();
+  }
+
+  function pergolaDelete(pergolaId){
+    const pg = pergolas.get(pergolaId);
+    if (!pg) return;
+
+    pg.layer.off("click");
+    pergolaShapes.removeLayer(pg.layer);
+
+    const g = pergolaPanels.get(pergolaId);
+    if (g) { g.clearLayers(); map.removeLayer(g); }
+    pergolaPanels.delete(pergolaId);
+
+    pergolas.delete(pergolaId);
+
+    if (selectedPergolaId === pergolaId){
+      selectedPergolaId = null;
+      pergolaClearUi();
+    }
+
+    rebuildAllPanelsAndOverlaps();
+  }
+
+  /* -------- Pergola UI (markers + live inputs) -------- */
+  const pergolaUi = {
+    aMarker:null, bMarker:null, cMarker:null,
+    lblW:null, lblL:null,
+    activeId:null,
+    wInputId:null, lInputId:null
+  };
+
+  function pergolaClearUi(){
+    pergolaUiLayer.clearLayers();
+    pergolaUi.aMarker = pergolaUi.bMarker = pergolaUi.cMarker = null;
+    pergolaUi.lblW = pergolaUi.lblL = null;
+    pergolaUi.activeId = null;
+    pergolaUi.wInputId = null;
+    pergolaUi.lInputId = null;
+    try { map.dragging.enable(); } catch {}
+    stopCustomCDrag();
+  }
+
+  function stopEventOnMarker(marker){
+    marker.on("click", (e)=>{ L.DomEvent.stopPropagation(e); });
+    marker.on("mousedown", (e)=>{ L.DomEvent.stopPropagation(e); });
+    marker.on("dblclick", (e)=>{ L.DomEvent.stopPropagation(e); });
+  }
+
+  function stopMapDragDuringMarkerDrag(marker){
+    marker.on("dragstart", () => {
+      suppressNextMapClick = true;
+      try { map.dragging.disable(); } catch {}
+    });
+    marker.on("dragend", () => {
+      try { map.dragging.enable(); } catch {}
+      setTimeout(() => { suppressNextMapClick = false; }, 60);
+    });
+    marker.on("remove", () => { try { map.dragging.enable(); } catch {} });
+  }
+
+  function mkInputMarker(lat, lon, html){
+    const mk = L.marker([lat, lon], {
+      interactive: true,
+      keyboard: false,
+      icon: L.divIcon({ className: "", html, iconSize: [160, 34] })
+    });
+    mk.on("click", (e) => { L.DomEvent.stopPropagation(e); });
+    return mk;
+  }
+
+  function updatePergolaInputsIfPresent(breedte, lengte){
+    const w = pergolaUi.wInputId ? document.getElementById(pergolaUi.wInputId) : null;
+    const l = pergolaUi.lInputId ? document.getElementById(pergolaUi.lInputId) : null;
+    if (w) w.value = breedte.toFixed(1);
+    if (l) l.value = lengte.toFixed(1);
+  }
+
+  // --- Custom constrained drag for marker C ---
+  let cDragActive = false;
+
+  function stopCustomCDrag(){
+    if (!cDragActive) return;
+    cDragActive = false;
+    map.off("mousemove", onCustomCDragMove);
+    document.removeEventListener("mouseup", onCustomCDragEnd, true);
+    document.removeEventListener("touchend", onCustomCDragEnd, true);
+    try { map.dragging.enable(); } catch {}
+    setTimeout(() => { suppressNextMapClick = false; }, 80);
+  }
+
+  function startCustomCDrag(domEvt){
+    if (cDragActive) return;
+    if (!selectedPergolaId) return;
+
+    cDragActive = true;
+    suppressNextMapClick = true;
+    try { map.dragging.disable(); } catch {}
+
+    if (domEvt) {
+      const ll = map.mouseEventToLatLng(domEvt);
+      onCustomCDragMove({ latlng: ll });
+    }
+
+    map.on("mousemove", onCustomCDragMove);
+    document.addEventListener("mouseup", onCustomCDragEnd, true);
+    document.addEventListener("touchend", onCustomCDragEnd, true);
+  }
+
+  function onCustomCDragMove(e){
+    if (!cDragActive) return;
+    const id = selectedPergolaId;
+    const pg = pergolas.get(id);
+    if (!pg) return;
+
+    const A = pergolaUi.aMarker.getLatLng();
+    const B = pergolaUi.bMarker.getLatLng();
+    const mouseLL = e.latlng;
+
+    const { constrainedLatLng, signedMeters } = constrainPerpThroughBase(A, B, mouseLL, B);
+
+    pergolaUi.cMarker.setLatLng(constrainedLatLng);
+    pergolaUpdatePolygonAndState(id, A, B, signedMeters);
+  }
+
+  function onCustomCDragEnd(){
+    stopCustomCDrag();
+  }
+
+  function pergolaSyncUi(moveOnly){
+    if (!selectedPergolaId || mode === "delete") { pergolaClearUi(); return; }
+    const pg = pergolas.get(selectedPergolaId);
+    if (!pg) { pergolaClearUi(); return; }
+
+    const { A, B, C } = pergolaCorners(pg.A, pg.B, pg.lengthSignedM);
+
+    const breedte = distanceM(A, B);
+    const lengte  = distanceM(B, C);
+
+    const midAB = turf.midpoint(turf.point([A.lng,A.lat]), turf.point([B.lng,B.lat])).geometry.coordinates;
+    const midBC = turf.midpoint(turf.point([B.lng,B.lat]), turf.point([C.lng,C.lat])).geometry.coordinates;
+
+    if (pergolaUi.activeId === selectedPergolaId && pergolaUi.aMarker && moveOnly){
+      pergolaUi.aMarker.setLatLng(A);
+      pergolaUi.bMarker.setLatLng(B);
+      pergolaUi.cMarker.setLatLng(C);
+
+      pergolaUi.lblW.setLatLng([midAB[1], midAB[0]]);
+      pergolaUi.lblL.setLatLng([midBC[1], midBC[0]]);
+      updatePergolaInputsIfPresent(breedte, lengte);
+      return;
+    }
+
+    pergolaClearUi();
+    pergolaUi.activeId = selectedPergolaId;
+
+    const mA = L.marker(A, { draggable: true, icon: makeDrawHandleIcon(1) });
+    const mB = L.marker(B, { draggable: true, icon: makeDrawHandleIcon(2) });
+    const mC = L.marker(C, { draggable: false, icon: makeDrawHandleIcon(3) }); // custom drag
+
+    stopEventOnMarker(mA); stopEventOnMarker(mB); stopEventOnMarker(mC);
+    stopMapDragDuringMarkerDrag(mA);
+    stopMapDragDuringMarkerDrag(mB);
+
+    mA.on("drag", () => {
+      const newA = mA.getLatLng();
+      const oldA = pg.A;
+      const oldB = pg.B;
+
+      const a0 = proj(oldA), b0 = proj(oldB), a1 = proj(newA);
+      const dx = b0.x - a0.x, dy = b0.y - a0.y;
+      const newB = unproj({x: a1.x + dx, y: a1.y + dy});
+
+      pergolaUpdatePolygonAndState(selectedPergolaId, newA, newB, pg.lengthSignedM);
+    });
+
+    mB.on("drag", () => {
+      const newB = mB.getLatLng();
+      pergolaUpdatePolygonAndState(selectedPergolaId, pg.A, newB, pg.lengthSignedM);
+    });
+
+    mC.on("mousedown", (ev) => {
+      L.DomEvent.stopPropagation(ev);
+      startCustomCDrag(ev.originalEvent);
+    });
+    mC.on("touchstart", (ev) => {
+      L.DomEvent.stopPropagation(ev);
+      const oe = ev.originalEvent;
+      startCustomCDrag(oe?.touches?.[0] || oe);
+    });
+
+    const wId = `perg-w-${selectedPergolaId}-${Math.random().toString(16).slice(2)}`;
+    const lId = `perg-l-${selectedPergolaId}-${Math.random().toString(16).slice(2)}`;
+    pergolaUi.wInputId = wId;
+    pergolaUi.lInputId = lId;
+
+    const wHtml = `
+      <div class="len-label">
+        <span>Breedte</span>
+        <input id="${wId}" inputmode="decimal" type="number" step="0.1" min="0" value="${breedte.toFixed(1)}"/>
+        <span>m</span>
+      </div>`;
+    const lHtml = `
+      <div class="len-label">
+        <span>Lengte</span>
+        <input id="${lId}" inputmode="decimal" type="number" step="0.1" min="0" value="${lengte.toFixed(1)}"/>
+        <span>m</span>
+      </div>`;
+
+    const lblW = L.marker([midAB[1], midAB[0]], { interactive:true, keyboard:false, icon: L.divIcon({ className:"", html: wHtml, iconSize:[160,34] }) });
+    const lblL = L.marker([midBC[1], midBC[0]], { interactive:true, keyboard:false, icon: L.divIcon({ className:"", html: lHtml, iconSize:[160,34] }) });
+
+    lblW.on("click", (e)=>L.DomEvent.stopPropagation(e));
+    lblL.on("click", (e)=>L.DomEvent.stopPropagation(e));
+
+    pergolaUiLayer.addLayer(mA);
+    pergolaUiLayer.addLayer(mB);
+    pergolaUiLayer.addLayer(mC);
+    pergolaUiLayer.addLayer(lblW);
+    pergolaUiLayer.addLayer(lblL);
+
+    pergolaUi.aMarker = mA;
+    pergolaUi.bMarker = mB;
+    pergolaUi.cMarker = mC;
+    pergolaUi.lblW = lblW;
+    pergolaUi.lblL = lblL;
+
+    setTimeout(() => {
+      const wInp = document.getElementById(wId);
+      const lInp = document.getElementById(lId);
+      if (!wInp || !lInp) return;
+
+      const stop = (ev) => ev.stopPropagation();
+      ["mousedown","mouseup","click","dblclick","keydown","wheel","touchstart","pointerdown"].forEach(evt => {
+        wInp.addEventListener(evt, stop, { passive: evt === "touchstart" || evt === "wheel" });
+        lInp.addEventListener(evt, stop, { passive: evt === "touchstart" || evt === "wheel" });
+      });
+
+      const applyBreedte = () => {
+        const v = parseFloat(wInp.value);
+        if (!isFinite(v)) return;
+        const bearing = bearingBetweenLL(pg.A, pg.B);
+        const newB = destinationFromLL(pg.A, Math.max(0, v), bearing);
+        pergolaUpdatePolygonAndState(selectedPergolaId, pg.A, newB, pg.lengthSignedM);
+      };
+
+      const applyLengte = () => {
+        const v = parseFloat(lInp.value);
+        if (!isFinite(v)) return;
+        const sign = (pg.lengthSignedM >= 0) ? 1 : -1;
+        pergolaUpdatePolygonAndState(selectedPergolaId, pg.A, pg.B, sign * Math.max(0, v));
+      };
+
+      wInp.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { applyBreedte(); wInp.blur(); } });
+      lInp.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { applyLengte(); lInp.blur(); } });
+      wInp.addEventListener("change", applyBreedte);
+      wInp.addEventListener("blur", applyBreedte);
+      lInp.addEventListener("change", applyLengte);
+      lInp.addEventListener("blur", applyLengte);
+    }, 0);
+  }
+
+  /* ===================== PERGOLA DRAW TOOLTIP (Leaflet.draw native) ===================== */
+  let pergolaDrawTip = null;
+
+  function pergolaTooltipText(){
+    if (pergolaDraw.step === 0) return "Klik punt A";
+    if (pergolaDraw.step === 1) return "Klik punt B (basislijn)";
+    return "Klik punt C (loodrecht vanaf B)";
+  }
+
+  function pergolaTipShow(latlng){
+    if (!pergolaDrawTip) pergolaDrawTip = new L.Draw.Tooltip(map);
+    pergolaDrawTip.updateContent({ text: pergolaTooltipText() });
+    if (latlng) pergolaDrawTip.updatePosition(latlng);
+  }
+
+  function pergolaTipHide(){
+    if (!pergolaDrawTip) return;
+    pergolaDrawTip.dispose();
+    pergolaDrawTip = null;
+  }
+
+  /* ===================== PERGOLA DRAW ===================== */
+  function clearPergolaDrawMarkers(){
+    pergolaDrawMarkerLayer.clearLayers();
+    pergolaDraw.mA = pergolaDraw.mB = pergolaDraw.mC = null;
+  }
+
+  function startPergolaDraw(){
+    stopPergolaDraw();
+    setMode("select");
+    pergolaDraw.active = true;
+    pergolaDraw.step = 0;
+    pergolaDraw.A = null;
+    pergolaDraw.B = null;
+    pergolaDraw.snappedC = null;
+
+    UI.drawPergolaBtn.classList.add("active");
+    map.getContainer().style.cursor = "crosshair";
+    pergolaTipShow(map.getCenter());
+  }
+
+  function stopPergolaDraw(){
+    pergolaDraw.active = false;
+    pergolaDraw.step = 0;
+    pergolaDraw.A = null;
+    pergolaDraw.B = null;
+    pergolaDraw.snappedC = null;
+
+    if (previewLine) { pergolaPreviewLayer.removeLayer(previewLine); previewLine = null; }
+    if (previewRect) { pergolaPreviewLayer.removeLayer(previewRect); previewRect = null; }
+    pergolaPreviewLayer.clearLayers();
+
+    clearPergolaDrawMarkers();
+
+    UI.drawPergolaBtn.classList.remove("active");
+    map.getContainer().style.cursor = (mode === "delete") ? "not-allowed" : "";
+    pergolaTipHide();
+  }
+
+  UI.drawPergolaBtn.onclick = () => {
+    if (pergolaDraw.active) stopPergolaDraw();
+    else startPergolaDraw();
+  };
+
+  function updatePergolaPreview(mouseLL){
+    if (!pergolaDraw.active) return;
+    if (!pergolaDraw.A) return;
+
+    const A = pergolaDraw.A;
+
+    // Step 1: dotted A -> cursor
+    if (pergolaDraw.step === 1) {
+      if (!previewLine) previewLine = L.polyline([A, mouseLL], STYLE_PREVIEW_LINE).addTo(pergolaPreviewLayer);
+      else previewLine.setLatLngs([A, mouseLL]);
+
+      if (previewRect) { pergolaPreviewLayer.removeLayer(previewRect); previewRect = null; }
+      if (pergolaDraw.mC) { pergolaDrawMarkerLayer.removeLayer(pergolaDraw.mC); pergolaDraw.mC = null; }
+      return;
+    }
+
+    // Step 2: B exists -> perpendicular C + rect
+    if (pergolaDraw.step < 2 || !pergolaDraw.B) return;
+    const B = pergolaDraw.B;
+
+    const { constrainedLatLng, signedMeters } = constrainPerpThroughBase(A, B, mouseLL, B);
+    pergolaDraw.snappedC = constrainedLatLng;
+
+    if (!pergolaDraw.mC){
+      pergolaDraw.mC = L.marker(constrainedLatLng, { interactive:false, icon: makeDrawHandleIcon(3) })
+        .addTo(pergolaDrawMarkerLayer);
+    } else {
+      pergolaDraw.mC.setLatLng(constrainedLatLng);
+    }
+
+    if (!previewLine) previewLine = L.polyline([A, B], STYLE_PREVIEW_LINE).addTo(pergolaPreviewLayer);
+    else previewLine.setLatLngs([A, B]);
+
+    const { A:AA, B:BB, C, D } = pergolaCorners(A, B, signedMeters);
+    if (!previewRect) previewRect = L.polygon([AA, BB, C, D], STYLE_PREVIEW_RECT).addTo(pergolaPreviewLayer);
+    else previewRect.setLatLngs([AA, BB, C, D]);
+  }
+
+  map.on("mousemove", (e) => {
+    if (!pergolaDraw.active) return;
+    updatePergolaPreview(e.latlng);
+    pergolaTipShow(e.latlng);
+  });
+
+  map.on("click", (e) => {
+    if (suppressNextMapClick) return;
+    if (mode === "delete") return;
+
+    if (pergolaDraw.active){
+      if (pergolaDraw.step === 0){
+        pergolaDraw.A = e.latlng;
+        pergolaDraw.step = 1;
+
+        clearPergolaDrawMarkers();
+        pergolaDraw.mA = L.marker(pergolaDraw.A, { interactive:false, icon: makeDrawHandleIcon(1) })
+          .addTo(pergolaDrawMarkerLayer);
+
+        if (!previewLine) previewLine = L.polyline([pergolaDraw.A, pergolaDraw.A], STYLE_PREVIEW_LINE).addTo(pergolaPreviewLayer);
+        else previewLine.setLatLngs([pergolaDraw.A, pergolaDraw.A]);
+
+        pergolaTipShow(e.latlng);
+        return;
+      }
+
+      if (pergolaDraw.step === 1){
+        pergolaDraw.B = e.latlng;
+        pergolaDraw.step = 2;
+
+        pergolaDraw.mB = L.marker(pergolaDraw.B, { interactive:false, icon: makeDrawHandleIcon(2) })
+          .addTo(pergolaDrawMarkerLayer);
+
+        if (!previewLine) previewLine = L.polyline([pergolaDraw.A, pergolaDraw.B], STYLE_PREVIEW_LINE).addTo(pergolaPreviewLayer);
+        else previewLine.setLatLngs([pergolaDraw.A, pergolaDraw.B]);
+
+        updatePergolaPreview(e.latlng);
+        pergolaTipShow(e.latlng);
+        return;
+      }
+
+      if (pergolaDraw.step === 2){
+        const A = pergolaDraw.A;
+        const B = pergolaDraw.B;
+        const { signedMeters } = constrainPerpThroughBase(A, B, e.latlng, B);
+
+        const id = pergolaCreate(A, B, signedMeters);
+        stopPergolaDraw();
+        pergolaSelect(id);
+        rebuildAllPanelsAndOverlaps();
+        return;
+      }
+    }
+
+    selectedCarportId = null;
+    selectedPergolaId = null;
+
+    adjustOn = false;
+    carportDisableAllEdits();
+    pergolaClearUi();
+    lengthLabelLayer.clearLayers();
+
+    recomputeOverlaps();
+    applyStyles();
+    updateTotals();
+    updateSideButtons();
+  });
+
+  /* ===================== Keyboard ===================== */
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      stopPergolaDraw();
+      if (mode === "delete") setMode("select");
+      return;
+    }
+    if (e.key === "Delete") {
+      const t = document.activeElement;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+      if (selectedCarportId) { carportDelete(selectedCarportId); return; }
+      if (selectedPergolaId) { pergolaDelete(selectedPergolaId); return; }
+    }
+  });
+
+  /* ===================== CLEAR ===================== */
+  UI.clearBtn.onclick = () => {
+    stopPergolaDraw();
+
+    carportLines.clearLayers();
+    for (const g of panelGroups.values()) { g.clearLayers(); map.removeLayer(g); }
+    panelGroups.clear();
+    carports.clear();
+
+    pergolaShapes.clearLayers();
+    for (const g of pergolaPanels.values()) { g.clearLayers(); map.removeLayer(g); }
+    pergolaPanels.clear();
+    pergolas.clear();
+
+    lengthLabelLayer.clearLayers();
+    pergolaClearUi();
+
+    overlappedPanelIds.clear();
+
+    selectedCarportId = null;
+    selectedPergolaId = null;
+
+    carportIdCounter = 1;
+    pergolaIdCounter = 1;
+    adjustOn = false;
+
+    setMode("select");
+    applyStyles();
+    updateTotals();
+    updateSideButtons();
+  };
+
+  /* ===================== Address autocomplete ===================== */
+  let suggTimer = null;
+  let lastQuery = "";
+
+  function hideSuggestions(){
+    UI.suggEl.style.display = "none";
+    UI.suggEl.innerHTML = "";
+  }
+  function showSuggestions(items){
+    UI.suggEl.innerHTML = "";
+    if (!items.length) { hideSuggestions(); return; }
+
+    for (const it of items){
+      const div = document.createElement("div");
+      div.className = "suggestion";
+      div.innerHTML = `<div>${escapeHtml(it.label || "Onbekend")}</div>
+                       <div class="sub">${escapeHtml(it.type || "")}</div>`;
+      div.onclick = async () => {
+        hideSuggestions();
+        UI.addrInput.value = it.label || "";
+
+        if (!it.id) return;
+        try{
+          const url = `https://api.pdok.nl/bzk/locatieserver/search/v3_1/lookup?id=${encodeURIComponent(it.id)}`;
+          const res = await fetch(url, { headers: { "Accept": "application/json" }});
+          const data = await res.json();
+          const doc = data?.response?.docs?.[0];
+          const centerStr = doc?.centroide_ll;
+          if (!centerStr) return;
+
+          const m = centerStr.match(/POINT\(([-\d.]+)\s+([-\d.]+)\)/);
+          if (!m) return;
+          map.setView([parseFloat(m[2]), parseFloat(m[1])], 19);
+        }catch{}
+      };
+      UI.suggEl.appendChild(div);
+    }
+    UI.suggEl.style.display = "block";
+  }
+  async function fetchSuggestions(q){
+    const url = `https://api.pdok.nl/bzk/locatieserver/search/v3_1/suggest?q=${encodeURIComponent(q)}&rows=8`;
+    const res = await fetch(url, { headers: { "Accept": "application/json" }});
+    const data = await res.json();
+    const docs = data?.response?.docs || [];
+    return docs.map(d => ({ id: d.id, label: d.weergavenaam || d.naam || d.id, type: d.type }));
+  }
+  UI.addrInput.addEventListener("input", () => {
+    const q = UI.addrInput.value.trim();
+    if (q.length < 3) { hideSuggestions(); return; }
+    lastQuery = q;
+
+    clearTimeout(suggTimer);
+    suggTimer = setTimeout(async () => {
+      try{
+        const items = await fetchSuggestions(q);
+        if (UI.addrInput.value.trim() !== lastQuery) return;
+        showSuggestions(items);
+      }catch{
+        hideSuggestions();
+      }
+    }, 180);
+  });
+  document.addEventListener("click", (e) => {
+    if (!UI.suggEl.contains(e.target) && e.target !== UI.addrInput) hideSuggestions();
+  });
+
+  /* ===================== PASSWORD ===================== */
+  (function(){
+    const overlay = document.getElementById("passwordOverlay");
+    const input   = document.getElementById("pwInput");
+    const btn     = document.getElementById("pwBtn");
+    const err     = document.getElementById("pwError");
+
+    function attempt(){
+      if (input.value === "1411"){
+        overlay.style.display = "none";
+      } else {
+        err.textContent = "Onjuist wachtwoord. Probeer opnieuw.";
+        input.value = "";
+        input.focus();
+      }
+    }
+
+    btn.addEventListener("click", attempt);
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") attempt(); });
+    setTimeout(() => input.focus(), 100);
+  })();
+
+  /* ===================== INIT ===================== */
+  setMode("select");
+  updateSideButtons();
+  updateTotals();
+</script>
+</body>
+</html>
