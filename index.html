@@ -1603,7 +1603,7 @@
       if (!res.ok) return;
       const data = await res.json();
       const feat = data?.features?.[0];
-      if (!feat) return;
+      if (!feat?.properties) return;
 
       const p = feat.properties;
       const dak      = p["b3_h_dak_50p"];
