@@ -31,6 +31,23 @@ app.get("/pvgis", async (req, res) => {
   }
 });
 
+// 3D BAG proxy (lost CORS op)
+app.get("/3dbag", async (req, res) => {
+  try {
+    const { bbox } = req.query;
+    if (!bbox) return res.status(400).json({ error: "bbox ontbreekt" });
+
+    const url = `https://api.3dbag.nl/collections/pand/items?bbox=${encodeURIComponent(bbox)}&limit=1&f=json`;
+    const r = await fetch(url, { headers: { Accept: "application/geo+json" } });
+    if (!r.ok) return res.status(502).send(await r.text());
+
+    const data = await r.json();
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: "3D BAG proxy error", details: String(e) });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server draait op http://localhost:${PORT}`);
 });
