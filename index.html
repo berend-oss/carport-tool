@@ -1599,7 +1599,7 @@
     const bbox = `${sw.x},${sw.y},${ne.x},${ne.y}`;
     try {
       const apiUrl = `https://api.3dbag.nl/collections/pand/items?bbox=${bbox}&limit=1`;
-      const res = await fetch(`https://corsproxy.io/?url=${encodeURIComponent(apiUrl)}`);
+      const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`);
       if (!res.ok) return;
       const data = await res.json();
       const feat = data?.features?.[0];
