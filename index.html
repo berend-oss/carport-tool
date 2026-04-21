@@ -1573,11 +1573,32 @@
   });
 
   /* ===================== 3D BAG BUILDING HEIGHT ===================== */
+  function toRD(lat, lon){
+    const dLat = 0.36 * (lat - 52.15517440);
+    const dLon = 0.36 * (lon - 5.38720621);
+    const x = 155000
+      + 190094.945 * dLon
+      -  11832.228 * dLon * dLat
+      -    114.221 * dLon * dLat * dLat
+      -     32.391 * dLon * dLon * dLon
+      -      0.705 * dLat
+      -      2.340 * dLon * dLon * dLat;
+    const y = 463000
+      + 309056.544 * dLat
+      +  73839.316 * dLon * dLon
+      -  55146.490 * dLat * dLat
+      -   2659.985 * dLon * dLon * dLat
+      +   3976.686 * dLat * dLat * dLat;
+    return { x: Math.round(x), y: Math.round(y) };
+  }
+
   async function query3dBag(latlng){
     const d = 0.0003;
-    const bbox = `${latlng.lng-d},${latlng.lat-d},${latlng.lng+d},${latlng.lat+d}`;
+    const sw = toRD(latlng.lat - d, latlng.lng - d);
+    const ne = toRD(latlng.lat + d, latlng.lng + d);
+    const bbox = `${sw.x},${sw.y},${ne.x},${ne.y}`;
     try {
-      const res = await fetch(`https://api.3dbag.nl/collections/pand/items?bbox=${bbox}&limit=1&f=json`, {
+      const res = await fetch(`https://api.3dbag.nl/collections/pand/items?bbox=${bbox}&limit=1`, {
         headers: { Accept: "application/geo+json" }
       });
       if (!res.ok) return;
@@ -1586,8 +1607,8 @@
       if (!feat) return;
 
       const p = feat.properties;
-      const dak      = p["b3_h_dak_50p"]      ?? p["h_dak_50p"];
-      const maaiveld = p["b3_h_maaiveld_50p"] ?? p["h_maaiveld_50p"];
+      const dak      = p["b3_h_dak_50p"];
+      const maaiveld = p["b3_h_maaiveld"];
       const hoogte   = (dak != null && maaiveld != null) ? (dak - maaiveld).toFixed(1) : "–";
       const dakNAP   = dak != null ? dak.toFixed(1) : "–";
 
