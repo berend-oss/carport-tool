@@ -1577,7 +1577,9 @@
     const d = 0.0003;
     const bbox = `${latlng.lng-d},${latlng.lat-d},${latlng.lng+d},${latlng.lat+d}`;
     try {
-      const res = await fetch(`/3dbag?bbox=${encodeURIComponent(bbox)}`);
+      const res = await fetch(`https://api.3dbag.nl/collections/pand/items?bbox=${bbox}&limit=1&f=json`, {
+        headers: { Accept: "application/geo+json" }
+      });
       if (!res.ok) return;
       const data = await res.json();
       const feat = data?.features?.[0];
