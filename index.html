@@ -441,12 +441,21 @@
       { units: "meters" }
     );
 
-    const toolbarLL = destinationFromLL(midLL, pxToM(68), bearing - 90);
+    // Determine which perpendicular side is visually westward (sin ≤ 0) so the
+    // toolbar always floats on the visual-left side regardless of draw direction.
+    const pLeftB  = ((bearing - 90) + 360) % 360;
+    const pRightB = (bearing + 90) % 360;
+    const useLeft = Math.sin(pLeftB * Math.PI / 180) <= 0;
+    const toolbarBearing = useLeft ? pLeftB : pRightB;
+    // Map ← button to toolbar-side sideMode, → to opposite
+    const clickLeft  = useLeft ? 'left'  : 'right';
+    const clickRight = useLeft ? 'right' : 'left';
+
+    const toolbarLL = destinationFromLL(midLL, pxToM(68), toolbarBearing);
     const inputId = `len-input-${id}`;
 
     function arrowSvg(dir, active){
       const c = active ? '#fff' : '#1f4f99';
-      // dir: 'left' → ← (270°), 'right' → → (90°)
       const rot = dir === 'left' ? 270 : 90;
       return `<svg width="12" height="12" viewBox="-6 -6 12 12" style="transform:rotate(${rot}deg);overflow:visible;pointer-events:none;display:block;"><polygon points="0,-6 6,6 -6,6" fill="${c}"/></svg>`;
     }
@@ -455,7 +464,7 @@
       return `<span style="font-size:13px;font-weight:900;color:${c};line-height:1;pointer-events:none;">V</span>`;
     }
 
-    const la = cp.sideMode === 'left', ba = cp.sideMode === 'both', ra = cp.sideMode === 'right';
+    const la = cp.sideMode === clickLeft, ba = cp.sideMode === 'both', ra = cp.sideMode === clickRight;
     function btnStyle(a){ return `width:30px;height:30px;border:1.5px solid #1f4f99;border-radius:6px;background:${a?'#1f4f99':'#fff'};cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;`; }
 
     const toolbarHtml = `<div style="display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,0.97);border:1.5px solid #bbb;border-radius:10px;padding:4px 8px;box-shadow:0 2px 10px rgba(0,0,0,0.18);white-space:nowrap;pointer-events:all;user-select:none;">
@@ -501,12 +510,14 @@
         unproj({ x: proj(curLL[1]).x + dx, y: proj(curLL[1]).y + dy })
       ]);
       prevMvPos = cur;
-      // Keep toolbar in sync (same bearing normalization as above)
+      // Keep toolbar in sync using same westward-perpendicular logic
       const nll = cp.layer.getLatLngs();
       let nb = bearingBetweenLL(nll[0], nll[1]);
       if (nb < 0) nb += 360; if (nb >= 180) nb -= 180;
+      const npL = ((nb - 90) + 360) % 360;
+      const nTB = Math.sin(npL * Math.PI / 180) <= 0 ? npL : (nb + 90) % 360;
       const nm = turf.midpoint(turf.point([nll[0].lng,nll[0].lat]),turf.point([nll[1].lng,nll[1].lat])).geometry.coordinates;
-      toolbarMk.setLatLng(destinationFromLL(L.latLng(nm[1],nm[0]), pxToM(68), nb - 90));
+      toolbarMk.setLatLng(destinationFromLL(L.latLng(nm[1],nm[0]), pxToM(68), nTB));
       carportRedrawPanels(id); recomputeOverlaps(); applyStyles(); updateTotals();
     });
     mvHandle.on('dragend', () => {
