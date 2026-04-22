@@ -423,7 +423,11 @@
     if (!ll || ll.length < 2) return;
 
     const A = ll[0], B = ll[1];
-    const bearing = bearingBetweenLL(A, B);
+    // Normalize bearing to [0°, 180°) so L/R is consistent regardless of draw direction
+    let bearing = bearingBetweenLL(A, B);
+    if (bearing < 0) bearing += 360;
+    if (bearing >= 180) bearing -= 180;
+
     const midPt = turf.midpoint(
       turf.point([A.lng, A.lat]),
       turf.point([B.lng, B.lat])
@@ -445,11 +449,11 @@
 
     function arrowSvg(rot, active){
       const c = active ? '#fff' : '#1f4f99';
-      return `<svg width="14" height="14" viewBox="0 0 12 12"><polygon points="6,0 12,12 0,12" fill="${c}" transform="rotate(${rot},6,6)"/></svg>`;
+      return `<span style="display:inline-block;font-size:13px;color:${c};transform:rotate(${rot}deg);line-height:1;pointer-events:none;">▲</span>`;
     }
-    function vSvg(active){
+    function vLabel(active){
       const c = active ? '#fff' : '#1f4f99';
-      return `<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><polyline points="5.8,14 8,2 10.2,14" stroke="${c}" stroke-width="2.3" stroke-linejoin="round"/></svg>`;
+      return `<span style="font-size:13px;font-weight:900;color:${c};line-height:1;pointer-events:none;">V</span>`;
     }
 
     const la = cp.sideMode === 'left', ba = cp.sideMode === 'both', ra = cp.sideMode === 'right';
@@ -457,7 +461,7 @@
 
     const toolbarHtml = `<div style="display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,0.97);border:1.5px solid #bbb;border-radius:10px;padding:4px 8px;box-shadow:0 2px 10px rgba(0,0,0,0.18);white-space:nowrap;pointer-events:all;user-select:none;">
       <button data-side="left" style="${btnStyle(la)}">${arrowSvg(lRot, la)}</button>
-      <button data-side="both" style="${btnStyle(ba)}">${vSvg(ba)}</button>
+      <button data-side="both" style="${btnStyle(ba)}">${vLabel(ba)}</button>
       <button data-side="right" style="${btnStyle(ra)}">${arrowSvg(rRot, ra)}</button>
       <span style="width:1px;height:22px;background:#ddd;margin:0 3px;flex-shrink:0;"></span>
       <span style="font-size:12px;color:#555;">Lengte</span>
@@ -498,9 +502,10 @@
         unproj({ x: proj(curLL[1]).x + dx, y: proj(curLL[1]).y + dy })
       ]);
       prevMvPos = cur;
-      // Keep toolbar in sync
+      // Keep toolbar in sync (same bearing normalization as above)
       const nll = cp.layer.getLatLngs();
-      const nb = bearingBetweenLL(nll[0], nll[1]);
+      let nb = bearingBetweenLL(nll[0], nll[1]);
+      if (nb < 0) nb += 360; if (nb >= 180) nb -= 180;
       const nm = turf.midpoint(turf.point([nll[0].lng,nll[0].lat]),turf.point([nll[1].lng,nll[1].lat])).geometry.coordinates;
       toolbarMk.setLatLng(destinationFromLL(L.latLng(nm[1],nm[0]), pxToM(68), nb - 90));
       carportRedrawPanels(id); recomputeOverlaps(); applyStyles(); updateTotals();
@@ -508,12 +513,9 @@
     mvHandle.on('dragend', () => {
       try { map.dragging.enable(); } catch {}
       setTimeout(() => { suppressNextMapClick = false; }, 80);
+      // Replace layer so Leaflet.draw gets fresh editing handles at the new position
+      carportReplaceLineLayer(id, cp.layer.getLatLngs());
       rebuildAllPanelsAndOverlaps();
-      carportSyncEditingState();
-      if (adjustOn && id && mode !== "delete") {
-        const layer = carports.get(id)?.layer;
-        if (layer) { carportRemoveMiddleMarkersRuntime(layer); carportApplyEndpointNumbering(layer); }
-      }
       saveToLocalStorage();
     });
     sidePickerLayer.addLayer(mvHandle);
@@ -616,12 +618,11 @@
   }
 
   function makeDrawHandleIcon(n){
-    const sz = Math.max(12, Math.min(22, Math.round(8 + (map.getZoom() - 14) * 2)));
     return L.divIcon({
       className: "",
-      html: `<div class="draw-handle big" style="width:${sz}px;height:${sz}px;"><div class="n">${n}</div></div>`,
-      iconSize: [sz, sz],
-      iconAnchor: [Math.round(sz/2), Math.round(sz/2)]
+      html: `<div class="draw-handle big"><div class="n">${n}</div></div>`,
+      iconSize: [16, 16],
+      iconAnchor: [8, 8]
     });
   }
 
@@ -1966,13 +1967,7 @@
   });
 
 /* ===================== INIT ===================== */
-  map.on('zoomend', () => {
-    carportShowPickerUI(selectedCarportId);
-    if (adjustOn && selectedCarportId && mode !== "delete") {
-      const layer = carports.get(selectedCarportId)?.layer;
-      if (layer) { carportRemoveMiddleMarkersRuntime(layer); carportApplyEndpointNumbering(layer); }
-    }
-  });
+  map.on('zoomend', () => { carportShowPickerUI(selectedCarportId); });
 
   setMode("select");
   updateSideButtons();
