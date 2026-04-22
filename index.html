@@ -283,6 +283,7 @@
   let selectedPergolaId = null;
 
   let mode = "select"; // select | delete
+  let addressSearched = false; // height lookup only after an address is searched
   let adjustOn = false;
 
   let suppressNextMapClick = false;
@@ -1539,7 +1540,7 @@
     updateTotals();
     updateSideButtons();
 
-    if (mode !== "delete") query3dBag(e.latlng);
+    if (mode !== "delete" && addressSearched) query3dBag(e.latlng);
   });
 
   /* ===================== BUILDING HEIGHT LOOKUP ===================== */
@@ -1548,7 +1549,7 @@
     const d = 0.0003;
     const bbox = `${latlng.lng-d},${latlng.lat-d},${latlng.lng+d},${latlng.lat+d}`;
     const apiUrl = `https://api.3dbag.nl/collections/pand/items?bbox=${bbox}&limit=1&f=json`;
-    const res = await fetch(`https://corsproxy.io/?url=${encodeURIComponent(apiUrl)}`);
+    const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`);
     if (!res.ok) throw new Error(`3dbag ${res.status}`);
     const data = await res.json();
     const p = data?.features?.[0]?.properties;
@@ -1682,6 +1683,7 @@
 
           const m = centerStr.match(/POINT\(([-\d.]+)\s+([-\d.]+)\)/);
           if (!m) return;
+          addressSearched = true;
           map.setView([parseFloat(m[2]), parseFloat(m[1])], 19);
         }catch{}
       };
