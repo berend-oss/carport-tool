@@ -409,61 +409,74 @@
   /* ===================== SIDE PICKER ===================== */
   const sidePickerLayer = L.layerGroup().addTo(map);
 
-  function carportRemoveSidePicker(){ sidePickerLayer.clearLayers(); }
+  function carportRemoveSidePicker(){
+    sidePickerLayer.clearLayers();
+    lengthLabelLayer.clearLayers();
+  }
 
-  function carportShowSidePicker(id){
+  function carportShowPickerUI(id){
     carportRemoveSidePicker();
     if (!id || mode === "delete") return;
     const cp = carports.get(id);
     if (!cp) return;
     const ll = cp.layer.getLatLngs();
     if (!ll || ll.length < 2) return;
+
     const A = ll[0], B = ll[1];
     const bearing = bearingBetweenLL(A, B);
-    const midPt = turf.midpoint(turf.point([A.lng,A.lat]), turf.point([B.lng,B.lat])).geometry.coordinates;
+    const midPt = turf.midpoint(
+      turf.point([A.lng, A.lat]),
+      turf.point([B.lng, B.lat])
+    ).geometry.coordinates;
     const midLL = L.latLng(midPt[1], midPt[0]);
 
-    const pL = bearing - 90, pR = bearing + 90;
-    const leftLL  = destinationFromLL(midLL, 4.5, pL);
-    const vLL     = destinationFromLL(midLL, 1.5, pL);
-    const moveLL  = destinationFromLL(midLL, 1.5, pR);
-    const rightLL = destinationFromLL(midLL, 4.5, pR);
+    const gj = cp.layer.toGeoJSON();
+    const lenM = turf.distance(
+      turf.point(gj.geometry.coordinates[0]),
+      turf.point(gj.geometry.coordinates[1]),
+      { units: "meters" }
+    );
 
-    // rotation for ▲ (base = north = 0°): rotate to point perpendicular-outward
-    const lRot = (pL + 360) % 360;
-    const rRot = (pR + 360) % 360;
+    const lRot = ((bearing - 90) + 360) % 360;
+    const rRot = ((bearing + 90) + 360) % 360;
+
+    const toolbarLL = destinationFromLL(midLL, pxToM(68), bearing - 90);
+    const inputId = `len-input-${id}`;
 
     function arrowSvg(rot, active){
       const c = active ? '#fff' : '#1f4f99';
-      return `<svg width="13" height="13" viewBox="0 0 12 12">
-        <polygon points="6,0 12,12 0,12" fill="${c}" transform="rotate(${rot},6,6)"/>
-      </svg>`;
+      return `<svg width="14" height="14" viewBox="0 0 12 12"><polygon points="6,0 12,12 0,12" fill="${c}" transform="rotate(${rot},6,6)"/></svg>`;
+    }
+    function vSvg(active){
+      const c = active ? '#fff' : '#1f4f99';
+      return `<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><polyline points="5.8,14 8,2 10.2,14" stroke="${c}" stroke-width="2.3" stroke-linejoin="round"/></svg>`;
     }
 
-    function makeSideBtn(latlng, html, sideMode){
-      const active = cp.sideMode === sideMode;
-      const mk = L.marker(latlng, { interactive:true, icon: L.divIcon({
-        className:'',
-        html:`<div style="width:32px;height:32px;background:${active?'#1f4f99':'rgba(255,255,255,0.96)'};
-          border:2px solid #1f4f99;border-radius:7px;display:flex;align-items:center;
-          justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.22);cursor:pointer;user-select:none;">
-          ${html}</div>`,
-        iconSize:[32,32], iconAnchor:[16,16]
-      })});
-      mk.on('click', (e) => { L.DomEvent.stopPropagation(e); updateSelectedSide(sideMode); });
-      return mk;
-    }
+    const la = cp.sideMode === 'left', ba = cp.sideMode === 'both', ra = cp.sideMode === 'right';
+    function btnStyle(a){ return `width:30px;height:30px;border:1.5px solid #1f4f99;border-radius:6px;background:${a?'#1f4f99':'#fff'};cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;`; }
 
-    const vActive = cp.sideMode === 'both';
-    const vHtml = `<span style="font-size:13px;font-weight:900;color:${vActive?'#fff':'#1f4f99'};">V</span>`;
+    const toolbarHtml = `<div style="display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,0.97);border:1.5px solid #bbb;border-radius:10px;padding:4px 8px;box-shadow:0 2px 10px rgba(0,0,0,0.18);white-space:nowrap;pointer-events:all;user-select:none;">
+      <button data-side="left" style="${btnStyle(la)}">${arrowSvg(lRot, la)}</button>
+      <button data-side="both" style="${btnStyle(ba)}">${vSvg(ba)}</button>
+      <button data-side="right" style="${btnStyle(ra)}">${arrowSvg(rRot, ra)}</button>
+      <span style="width:1px;height:22px;background:#ddd;margin:0 3px;flex-shrink:0;"></span>
+      <span style="font-size:12px;color:#555;">Lengte</span>
+      <input id="${inputId}" inputmode="decimal" type="number" step="0.1" min="0" value="${lenM.toFixed(1)}" ${adjustOn && mode !== "delete" ? "" : "disabled"} style="width:52px;font-size:12px;border:1px solid #ccc;border-radius:4px;padding:2px 4px;text-align:right;box-sizing:border-box;"/>
+      <span style="font-size:12px;color:#555;">m</span>
+    </div>`;
 
-    // Move handle
-    const mvHandle = L.marker(moveLL, { draggable:true, interactive:true, icon: L.divIcon({
-      className:'',
-      html:`<div style="width:30px;height:30px;background:rgba(255,255,255,0.96);border:2px solid #888;
-        border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;
-        cursor:grab;box-shadow:0 2px 6px rgba(0,0,0,0.2);user-select:none;">✥</div>`,
-      iconSize:[30,30], iconAnchor:[15,15]
+    const toolbarMk = L.marker(toolbarLL, {
+      interactive: true, keyboard: false,
+      icon: L.divIcon({ className: '', html: toolbarHtml, iconSize: [246, 44], iconAnchor: [123, 22] })
+    });
+    toolbarMk.on('click', (e) => L.DomEvent.stopPropagation(e));
+    sidePickerLayer.addLayer(toolbarMk);
+
+    // Move handle at midpoint
+    const mvHandle = L.marker(midLL, { draggable: true, interactive: true, icon: L.divIcon({
+      className: '',
+      html: `<div style="width:30px;height:30px;background:rgba(255,255,255,0.96);border:2px solid #888;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;cursor:grab;box-shadow:0 2px 6px rgba(0,0,0,0.2);user-select:none;">✥</div>`,
+      iconSize: [30, 30], iconAnchor: [15, 15]
     })});
     mvHandle.on('click', (e) => L.DomEvent.stopPropagation(e));
     mvHandle.on('mousedown', (e) => L.DomEvent.stopPropagation(e));
@@ -473,6 +486,7 @@
       prevMvPos = mvHandle.getLatLng();
       suppressNextMapClick = true;
       try { map.dragging.disable(); } catch {}
+      try { if (cp.layer.editing && cp.layer.editing._enabled) cp.layer.editing.disable(); } catch {}
     });
     mvHandle.on('drag', () => {
       const cur = mvHandle.getLatLng();
@@ -480,25 +494,50 @@
       const dx = pCur.x - pPrev.x, dy = pCur.y - pPrev.y;
       const curLL = cp.layer.getLatLngs();
       cp.layer.setLatLngs([
-        unproj({ x: proj(curLL[0]).x+dx, y: proj(curLL[0]).y+dy }),
-        unproj({ x: proj(curLL[1]).x+dx, y: proj(curLL[1]).y+dy })
+        unproj({ x: proj(curLL[0]).x + dx, y: proj(curLL[0]).y + dy }),
+        unproj({ x: proj(curLL[1]).x + dx, y: proj(curLL[1]).y + dy })
       ]);
       prevMvPos = cur;
+      // Keep toolbar in sync
+      const nll = cp.layer.getLatLngs();
+      const nb = bearingBetweenLL(nll[0], nll[1]);
+      const nm = turf.midpoint(turf.point([nll[0].lng,nll[0].lat]),turf.point([nll[1].lng,nll[1].lat])).geometry.coordinates;
+      toolbarMk.setLatLng(destinationFromLL(L.latLng(nm[1],nm[0]), pxToM(68), nb - 90));
       carportRedrawPanels(id); recomputeOverlaps(); applyStyles(); updateTotals();
     });
     mvHandle.on('dragend', () => {
       try { map.dragging.enable(); } catch {}
       setTimeout(() => { suppressNextMapClick = false; }, 80);
-      rebuildAllPanelsAndOverlaps(); saveToLocalStorage();
+      rebuildAllPanelsAndOverlaps();
+      carportSyncEditingState();
+      if (adjustOn && id && mode !== "delete") {
+        const layer = carports.get(id)?.layer;
+        if (layer) { carportRemoveMiddleMarkersRuntime(layer); carportApplyEndpointNumbering(layer); }
+      }
+      saveToLocalStorage();
     });
-
-    sidePickerLayer.addLayer(makeSideBtn(leftLL,  arrowSvg(lRot, cp.sideMode==='left'),  'left'));
-    sidePickerLayer.addLayer(makeSideBtn(vLL,     vHtml,                                  'both'));
     sidePickerLayer.addLayer(mvHandle);
-    sidePickerLayer.addLayer(makeSideBtn(rightLL, arrowSvg(rRot, cp.sideMode==='right'), 'right'));
+
+    setTimeout(() => {
+      ['left','both','right'].forEach(side => {
+        const btn = toolbarMk.getElement()?.querySelector(`[data-side="${side}"]`);
+        if (!btn) return;
+        ['mousedown','mouseup','click','dblclick','touchstart','pointerdown'].forEach(evt =>
+          btn.addEventListener(evt, (e) => e.stopPropagation(), { passive: evt === 'touchstart' }));
+        btn.addEventListener('click', (e) => { e.stopPropagation(); updateSelectedSide(side); });
+      });
+      const inp = document.getElementById(inputId);
+      if (!inp) return;
+      ["mousedown","mouseup","click","dblclick","keydown","wheel","touchstart","pointerdown"].forEach(evt =>
+        inp.addEventListener(evt, (e) => e.stopPropagation(), { passive: evt === "touchstart" || evt === "wheel" }));
+      const apply = () => { const v = parseFloat(inp.value); if (isFinite(v)) carportApplyLength(v); };
+      inp.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { apply(); inp.blur(); } });
+      inp.addEventListener("change", apply);
+      inp.addEventListener("blur", apply);
+    }, 0);
   }
 
-  function updateSideButtons(){ carportShowSidePicker(selectedCarportId); }
+  function updateSideButtons(){ carportShowPickerUI(selectedCarportId); }
 
   function updateSelectedSide(modeVal){
     if (!selectedCarportId) return;
@@ -531,6 +570,7 @@
 
   function proj(ll){ return L.Projection.SphericalMercator.project(ll); }
   function unproj(p){ return L.Projection.SphericalMercator.unproject(p); }
+  function pxToM(px){ return (40075016.686 * Math.cos(map.getCenter().lat * Math.PI / 180) / Math.pow(2, map.getZoom() + 8)) * px; }
   function unitAlong(A, B){
     const a = proj(A), b = proj(B);
     const vx = b.x - a.x, vy = b.y - a.y;
@@ -576,11 +616,12 @@
   }
 
   function makeDrawHandleIcon(n){
+    const sz = Math.max(12, Math.min(22, Math.round(8 + (map.getZoom() - 14) * 2)));
     return L.divIcon({
       className: "",
-      html: `<div class="draw-handle big"><div class="n">${n}</div></div>`,
-      iconSize: [16, 16],
-      iconAnchor: [8, 8]
+      html: `<div class="draw-handle big" style="width:${sz}px;height:${sz}px;"><div class="n">${n}</div></div>`,
+      iconSize: [sz, sz],
+      iconAnchor: [Math.round(sz/2), Math.round(sz/2)]
     });
   }
 
@@ -952,63 +993,7 @@
     rebuildAllPanelsAndOverlaps();
   }
 
-  function carportRenderLengthLabel(){
-    lengthLabelLayer.clearLayers();
-    if (!selectedCarportId) return;
-
-    const cp = carports.get(selectedCarportId);
-    if (!cp) return;
-
-    const gj = cp.layer.toGeoJSON();
-    const coords = gj.geometry.coordinates;
-    if (!coords || coords.length < 2) return;
-
-    const a = coords[0];
-    const b = coords[1];
-    const lenM = turf.distance(turf.point(a), turf.point(b), {units:"meters"});
-    const mid = turf.midpoint(turf.point(a), turf.point(b)).geometry.coordinates;
-
-    const inputId = `len-input-${selectedCarportId}`;
-    const html = `
-      <div class="len-label">
-        <span>Lengte</span>
-        <input id="${inputId}" inputmode="decimal" type="number" step="0.1" min="0"
-               value="${lenM.toFixed(1)}" ${adjustOn && mode !== "delete" ? "" : "disabled"} />
-        <span>m</span>
-      </div>
-    `;
-
-    const marker = L.marker([mid[1], mid[0]], {
-      interactive: true,
-      keyboard: false,
-      icon: L.divIcon({ className: "", html, iconSize: [160, 34] })
-    });
-
-    marker.on("click", (e) => {
-      L.DomEvent.stopPropagation(e);
-      if (selectedCarportId) carportSelect(selectedCarportId);
-    });
-    lengthLabelLayer.addLayer(marker);
-
-    setTimeout(() => {
-      const inp = document.getElementById(inputId);
-      if (!inp) return;
-
-      const stop = (ev) => ev.stopPropagation();
-      ["mousedown","mouseup","click","dblclick","keydown","wheel","touchstart","pointerdown"].forEach(evt =>
-        inp.addEventListener(evt, stop, { passive: evt === "touchstart" || evt === "wheel" })
-      );
-
-      const apply = () => {
-        const v = parseFloat(inp.value);
-        if (isFinite(v)) carportApplyLength(v);
-      };
-
-      inp.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { apply(); inp.blur(); } });
-      inp.addEventListener("change", apply);
-      inp.addEventListener("blur", apply);
-    }, 0);
-  }
+  function carportRenderLengthLabel(){ carportShowPickerUI(selectedCarportId); }
 
   function carportSelect(id){
     selectedPergolaId = null;
@@ -1981,6 +1966,14 @@
   });
 
 /* ===================== INIT ===================== */
+  map.on('zoomend', () => {
+    carportShowPickerUI(selectedCarportId);
+    if (adjustOn && selectedCarportId && mode !== "delete") {
+      const layer = carports.get(selectedCarportId)?.layer;
+      if (layer) { carportRemoveMiddleMarkersRuntime(layer); carportApplyEndpointNumbering(layer); }
+    }
+  });
+
   setMode("select");
   updateSideButtons();
   updateTotals();
