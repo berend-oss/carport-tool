@@ -1565,6 +1565,7 @@
     const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`);
     if (!res.ok) throw new Error(`3dbag ${res.status}`);
     const data = await res.json();
+    console.log("3D BAG raw response:", JSON.stringify(data).slice(0, 2000));
 
     // try GeoJSON properties first, then CityJSON attributes
     const feat = data?.features?.[0];
