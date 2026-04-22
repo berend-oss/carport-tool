@@ -283,7 +283,6 @@
   let selectedPergolaId = null;
 
   let mode = "select"; // select | delete
-  let addressSearched = false; // height lookup only after an address is searched
   let adjustOn = false;
 
   let suppressNextMapClick = false;
@@ -1540,94 +1539,53 @@
     updateTotals();
     updateSideButtons();
 
-    if (mode !== "delete") {
-      console.log("map click – addressSearched:", addressSearched);
-      if (addressSearched) query3dBag(e.latlng);
-    }
+    if (mode !== "delete") query3dBag(e.latlng);
   });
 
-  /* ===================== BUILDING HEIGHT LOOKUP ===================== */
+  /* ===================== AHN4 HEIGHT LOOKUP ===================== */
+  const AHN_WMS = "https://service.pdok.nl/rws/ahn/wms/v1_0";
 
-  function toRD(lat, lon){
-    const dLat = 0.36 * (lat - 52.15517440);
-    const dLon = 0.36 * (lon - 5.38720621);
-    const x = 155000
-      + 190094.945*dLon - 11832.228*dLon*dLat - 114.221*dLon*dLat*dLat
-      - 32.391*dLon*dLon*dLon - 0.705*dLat - 2.340*dLon*dLon*dLat;
-    const y = 463000
-      + 309056.544*dLat + 73839.316*dLon*dLon - 55146.490*dLat*dLat
-      - 2659.985*dLon*dLon*dLat + 3976.686*dLat*dLat*dLat;
-    return { x: Math.round(x), y: Math.round(y) };
-  }
-
-  async function query3dBagHeight(latlng){
-    const d = 50; // metres in RD New
-    const c = toRD(latlng.lat, latlng.lng);
-    const bbox = `${c.x-d},${c.y-d},${c.x+d},${c.y+d}`;
-    const apiUrl = `https://api.3dbag.nl/collections/pand/items?bbox=${bbox}&limit=1&f=json`;
-    const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
-    const fetchUrl = isLocalhost
-      ? `/3dbag?bbox=${encodeURIComponent(bbox)}`
-      : `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`;
-    const res = await fetch(fetchUrl);
-    if (!res.ok) throw new Error(`3dbag ${res.status}`);
-    const data = await res.json();
-    console.log("3D BAG raw response:", JSON.stringify(data).slice(0, 2000));
-
-    // try GeoJSON properties first, then CityJSON attributes
-    const feat = data?.features?.[0];
-    const p = feat?.properties
-      ?? feat?.feature?.CityObjects?.[Object.keys(feat?.feature?.CityObjects ?? {})[0]]?.attributes;
-    if (!p) return null;
-
-    const dak      = p["b3_h_dak_50p"];
-    const maaiveld = p["b3_h_maaiveld"];
-    if (dak == null) return null;
-    return {
-      hoogte: maaiveld != null ? (dak - maaiveld).toFixed(1) : null,
-      dakNAP: dak.toFixed(1),
-      bron: "3D BAG"
-    };
-  }
-
-  async function queryOSMHeight(latlng){
-    const d = 0.0003;
-    const s = latlng.lat - d, n = latlng.lat + d;
-    const w = latlng.lng - d, e = latlng.lng + d;
-    const query = `[out:json][timeout:8];(way["building"](${s},${w},${n},${e});relation["building"](${s},${w},${n},${e}););out tags center 1;`;
-    const res = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`);
-    if (!res.ok) throw new Error(`overpass ${res.status}`);
-    const data = await res.json();
-    const el = data?.elements?.[0]?.tags;
-    if (!el) return null;
-
-    let hoogte = null;
-    if (el["height"])          hoogte = parseFloat(el["height"]).toFixed(1);
-    else if (el["building:levels"]) hoogte = (parseFloat(el["building:levels"]) * 3).toFixed(1) + " (geschat)";
-
-    if (!hoogte) return null;
-    return { hoogte, dakNAP: null, bron: "OpenStreetMap" };
+  async function ahnGetValue(layer, latlng){
+    const d = 0.001;
+    const minLat = latlng.lat - d, maxLat = latlng.lat + d;
+    const minLon = latlng.lng - d, maxLon = latlng.lng + d;
+    const W = 101, H = 101;
+    const url = `${AHN_WMS}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo` +
+      `&LAYERS=${layer}&QUERY_LAYERS=${layer}&CRS=EPSG:4326` +
+      `&BBOX=${minLat},${minLon},${maxLat},${maxLon}` +
+      `&WIDTH=${W}&HEIGHT=${H}&I=50&J=50&INFO_FORMAT=text/plain`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const text = await res.text();
+    const m = text.match(/-?[\d]+\.[\d]+|-?[\d]+/);
+    return m ? parseFloat(m[0]) : null;
   }
 
   async function query3dBag(latlng){
-    let result = null;
+    try {
+      const [dsm, dtm] = await Promise.all([
+        ahnGetValue("dsm_05m", latlng),
+        ahnGetValue("dtm_05m", latlng)
+      ]);
+      if (dsm == null) return;
 
-    try { result = await query3dBagHeight(latlng); } catch(e){ console.warn("3D BAG:", e); }
-    if (!result) {
-      try { result = await queryOSMHeight(latlng); } catch(e){ console.warn("OSM:", e); }
+      const maaiveld = dtm != null ? dtm.toFixed(1) : "–";
+      const hoogte   = dtm != null ? (dsm - dtm).toFixed(1) : "–";
+
+      L.popup({ closeButton: true })
+        .setLatLng(latlng)
+        .setContent(`
+          <div style="font-size:13px; line-height:1.7;">
+            <b>Hoogte (AHN4)</b><br>
+            Maaiveld: <b>${maaiveld} m</b> t.o.v. NAP<br>
+            Oppervlak: <b>${dsm.toFixed(1)} m</b> t.o.v. NAP<br>
+            Verschil: <b>${hoogte} m</b>
+            <div style="font-size:11px;color:#888;margin-top:4px;">Bron: PDOK AHN4 – geen proxy nodig</div>
+          </div>`)
+        .openOn(map);
+    } catch(err) {
+      console.warn("AHN hoogte query mislukt:", err);
     }
-    if (!result) return;
-
-    const dakRegel = result.dakNAP ? `<br>Dakrand t.o.v. NAP: ${result.dakNAP} m` : "";
-    L.popup({ closeButton: true })
-      .setLatLng(latlng)
-      .setContent(`
-        <div style="font-size:13px; line-height:1.7;">
-          <b>Gebouwhoogte</b><br>
-          Hoogte: <b>${result.hoogte} m</b>${dakRegel}
-          <div style="font-size:11px;color:#888;margin-top:4px;">Bron: ${result.bron}</div>
-        </div>`)
-      .openOn(map);
   }
 
   /* ===================== Keyboard ===================== */
@@ -1709,7 +1667,6 @@
 
           const m = centerStr.match(/POINT\(([-\d.]+)\s+([-\d.]+)\)/);
           if (!m) return;
-          addressSearched = true;
           map.setView([parseFloat(m[2]), parseFloat(m[1])], 19);
         }catch{}
       };
