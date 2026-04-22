@@ -1565,7 +1565,11 @@
     const c = toRD(latlng.lat, latlng.lng);
     const bbox = `${c.x-d},${c.y-d},${c.x+d},${c.y+d}`;
     const apiUrl = `https://api.3dbag.nl/collections/pand/items?bbox=${bbox}&limit=1&f=json`;
-    const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`);
+    const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+    const fetchUrl = isLocalhost
+      ? `/3dbag?bbox=${encodeURIComponent(bbox)}`
+      : `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`;
+    const res = await fetch(fetchUrl);
     if (!res.ok) throw new Error(`3dbag ${res.status}`);
     const data = await res.json();
     console.log("3D BAG raw response:", JSON.stringify(data).slice(0, 2000));
