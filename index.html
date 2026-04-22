@@ -449,7 +449,7 @@
 
     function arrowSvg(rot, active){
       const c = active ? '#fff' : '#1f4f99';
-      return `<span style="display:inline-block;font-size:13px;color:${c};transform:rotate(${rot}deg);line-height:1;pointer-events:none;">▲</span>`;
+      return `<svg width="12" height="12" viewBox="-6 -6 12 12" style="transform:rotate(${rot}deg);overflow:visible;pointer-events:none;display:block;"><polygon points="0,-6 6,6 -6,6" fill="${c}"/></svg>`;
     }
     function vLabel(active){
       const c = active ? '#fff' : '#1f4f99';
@@ -765,7 +765,6 @@
     if (adjustOn && selectedCarportId && mode !== "delete") {
       const layer = carports.get(selectedCarportId)?.layer;
       carportRemoveMiddleMarkersRuntime(layer);
-      carportApplyEndpointNumbering(layer);
     }
 
     saveToLocalStorage();
@@ -794,7 +793,9 @@
     const lineGJ = cp.layer.toGeoJSON();
     const lenM = turf.length(lineGJ, {units:"kilometers"}) * 1000;
     const coords = lineGJ.geometry.coordinates;
-    const bearing = turf.bearing(turf.point(coords[0]), turf.point(coords[coords.length-1]));
+    let bearing = turf.bearing(turf.point(coords[0]), turf.point(coords[coords.length-1]));
+    if (bearing < 0) bearing += 360;
+    if (bearing >= 180) bearing -= 180;
 
     const base = Math.floor(lenM / ROW_SPACING_M);
     const rest = lenM - base * ROW_SPACING_M;
@@ -903,44 +904,6 @@
       rm.forEach(m => mg.removeLayer(m));
     } catch {}
   }
-  function carportDist2(a, b){
-    const dx = a.lat - b.lat;
-    const dy = a.lng - b.lng;
-    return dx*dx + dy*dy;
-  }
-  function carportApplyEndpointNumbering(layer){
-    try{
-      const mg = carportGetEditMarkerGroup(layer);
-      if (!mg) return;
-
-      const ll = layer.getLatLngs();
-      if (!ll || ll.length < 2) return;
-      const start = ll[0];
-      const end   = ll[1];
-
-      const markers = [];
-      mg.eachLayer(m => {
-        if (!m || m._middle) return;
-        if (typeof m.getLatLng !== "function") return;
-        markers.push(m);
-      });
-      if (markers.length < 2) return;
-
-      let mStart = null, mEnd = null;
-      let bestS = Infinity, bestE = Infinity;
-
-      for (const m of markers){
-        const p = m.getLatLng();
-        const ds = carportDist2(p, start);
-        const de = carportDist2(p, end);
-        if (ds < bestS) { bestS = ds; mStart = m; }
-        if (de < bestE) { bestE = de; mEnd = m; }
-      }
-      if (!mStart || !mEnd) return;
-      // (Geen icon-wijziging; je wil de draw-markers behouden.)
-    } catch {}
-  }
-
   function carportDisableAllEdits(){
     for (const [, cp] of carports.entries()){
       try { if (cp.layer.editing && cp.layer.editing.enabled()) cp.layer.editing.disable(); } catch {}
@@ -1967,8 +1930,6 @@
   });
 
 /* ===================== INIT ===================== */
-  map.on('zoomend', () => { carportShowPickerUI(selectedCarportId); });
-
   setMode("select");
   updateSideButtons();
   updateTotals();
