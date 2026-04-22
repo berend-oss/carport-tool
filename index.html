@@ -247,8 +247,18 @@
   });
   map.addControl(new AhnLegend());
 
-  map.on("overlayadd",    (e) => { if (e.name === "Hoogtekaart (AHN4)") document.getElementById("ahnLegend").style.display = ""; });
-  map.on("overlayremove", (e) => { if (e.name === "Hoogtekaart (AHN4)") document.getElementById("ahnLegend").style.display = "none"; });
+  map.on("overlayadd", (e) => {
+    if (e.name !== "Hoogtekaart (AHN4)") return;
+    ahnLayerActive = true;
+    document.getElementById("ahnLegend").style.display = "";
+  });
+  map.on("overlayremove", (e) => {
+    if (e.name !== "Hoogtekaart (AHN4)") return;
+    ahnLayerActive = false;
+    ahnPoint1 = null;
+    if (ahnMarker1) { map.removeLayer(ahnMarker1); ahnMarker1 = null; }
+    document.getElementById("ahnLegend").style.display = "none";
+  });
 
   // Remove middle edit markers globally (carports)
   if (L.Edit && L.Edit.PolyVerticesEdit) {
@@ -286,6 +296,10 @@
   let adjustOn = false;
 
   let suppressNextMapClick = false;
+
+  let ahnLayerActive = false;
+  let ahnPoint1 = null;
+  let ahnMarker1 = null;
 
   const pergolaDraw = { active:false, step:0, A:null, B:null, snappedC:null, mA:null, mB:null, mC:null };
 
@@ -1539,21 +1553,20 @@
     updateTotals();
     updateSideButtons();
 
-    if (mode !== "delete") query3dBag(e.latlng);
+    if (mode !== "delete") ahnClick(e.latlng);
   });
 
   /* ===================== AHN4 HEIGHT LOOKUP ===================== */
   const AHN_WMS = "https://service.pdok.nl/rws/ahn/wms/v1_0";
 
-  async function ahnGetValue(layer, latlng){
+  async function ahnGetValue(latlng){
     const d = 0.001;
     const minLat = latlng.lat - d, maxLat = latlng.lat + d;
     const minLon = latlng.lng - d, maxLon = latlng.lng + d;
-    const W = 101, H = 101;
     const url = `${AHN_WMS}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo` +
-      `&LAYERS=${layer}&QUERY_LAYERS=${layer}&CRS=EPSG:4326` +
+      `&LAYERS=dsm_05m&QUERY_LAYERS=dsm_05m&CRS=EPSG:4326` +
       `&BBOX=${minLat},${minLon},${maxLat},${maxLon}` +
-      `&WIDTH=${W}&HEIGHT=${H}&I=50&J=50&INFO_FORMAT=text/plain`;
+      `&WIDTH=101&HEIGHT=101&I=50&J=50&INFO_FORMAT=text/plain`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const text = await res.text();
@@ -1561,28 +1574,40 @@
     return m ? parseFloat(m[0]) : null;
   }
 
-  async function query3dBag(latlng){
+  async function ahnClick(latlng){
+    if (!ahnLayerActive) return;
     try {
-      const [dsm, dtm] = await Promise.all([
-        ahnGetValue("dsm_05m", latlng),
-        ahnGetValue("dtm_05m", latlng)
-      ]);
-      if (dsm == null) return;
+      const h = await ahnGetValue(latlng);
+      if (h == null) return;
 
-      const maaiveld = dtm != null ? dtm.toFixed(1) : "–";
-      const hoogte   = dtm != null ? (dsm - dtm).toFixed(1) : "–";
-
-      L.popup({ closeButton: true })
-        .setLatLng(latlng)
-        .setContent(`
-          <div style="font-size:13px; line-height:1.7;">
-            <b>Hoogte (AHN4)</b><br>
-            Maaiveld: <b>${maaiveld} m</b> t.o.v. NAP<br>
-            Oppervlak: <b>${dsm.toFixed(1)} m</b> t.o.v. NAP<br>
-            Verschil: <b>${hoogte} m</b>
-            <div style="font-size:11px;color:#888;margin-top:4px;">Bron: PDOK AHN4 – geen proxy nodig</div>
-          </div>`)
-        .openOn(map);
+      if (!ahnPoint1) {
+        ahnPoint1 = { latlng, h };
+        ahnMarker1 = L.marker(latlng, {
+          interactive: false,
+          icon: L.divIcon({
+            className: "",
+            html: `<div class="len-label"><span>Punt 1: ${h.toFixed(1)} m</span></div>`,
+            iconSize: [130, 30], iconAnchor: [65, 15]
+          })
+        }).addTo(map);
+      } else {
+        const diff = (h - ahnPoint1.h);
+        const sign = diff > 0 ? "+" : "";
+        L.popup({ closeButton: true })
+          .setLatLng(latlng)
+          .setContent(`
+            <div style="font-size:13px; line-height:1.8;">
+              <b>Hoogteverschil (AHN4)</b><br>
+              Punt 1: <b>${ahnPoint1.h.toFixed(1)} m</b> NAP<br>
+              Punt 2: <b>${h.toFixed(1)} m</b> NAP<br>
+              <div style="border-top:1px solid #eee; margin-top:4px; padding-top:4px;">
+                Verschil: <b>${sign}${diff.toFixed(1)} m</b>
+              </div>
+            </div>`)
+          .openOn(map);
+        map.removeLayer(ahnMarker1); ahnMarker1 = null;
+        ahnPoint1 = null;
+      }
     } catch(err) {
       console.warn("AHN hoogte query mislukt:", err);
     }
