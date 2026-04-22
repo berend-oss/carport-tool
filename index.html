@@ -1540,7 +1540,10 @@
     updateTotals();
     updateSideButtons();
 
-    if (mode !== "delete" && addressSearched) query3dBag(e.latlng);
+    if (mode !== "delete") {
+      console.log("map click – addressSearched:", addressSearched);
+      if (addressSearched) query3dBag(e.latlng);
+    }
   });
 
   /* ===================== BUILDING HEIGHT LOOKUP ===================== */
