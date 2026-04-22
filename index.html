@@ -350,6 +350,7 @@
         <div class="ui-row">
           <button id="uiExport" class="btn" type="button">📤 Exporteren</button>
           <button id="uiImport" class="btn" type="button">📂 Importeren</button>
+          <button id="uiZoomFit" class="btn" type="button">🎯 Zoom</button>
         </div>
         <div id="uiSaveStatus" class="ui-small" style="color:#888; min-height:16px; margin-top:4px;"></div>
 
@@ -385,6 +386,7 @@
   UI.clearBtn       = document.getElementById("uiClear");
   UI.exportBtn      = document.getElementById("uiExport");
   UI.importBtn      = document.getElementById("uiImport");
+  UI.zoomFitBtn     = document.getElementById("uiZoomFit");
   UI.saveStatus     = document.getElementById("uiSaveStatus");
 
   UI.addrInput = document.getElementById("uiAddress");
@@ -1718,7 +1720,8 @@
   }
 
   function serializeState(){
-    const out = { v: 1, carports: [], pergolas: [] };
+    const c = map.getCenter();
+    const out = { v: 1, center: [c.lat, c.lng], zoom: map.getZoom(), carports: [], pergolas: [] };
     for (const [, cp] of carports.entries()){
       const ll = cp.layer.getLatLngs();
       out.carports.push({ latlngs: ll.map(p => [p.lat, p.lng]), sideMode: cp.sideMode });
@@ -1727,6 +1730,15 @@
       out.pergolas.push({ A: [pg.A.lat, pg.A.lng], B: [pg.B.lat, pg.B.lng], lsm: pg.lengthSignedM });
     }
     return JSON.stringify(out);
+  }
+
+  function zoomToFit(){
+    const layers = [];
+    carportLines.eachLayer(l => layers.push(l));
+    pergolaShapes.eachLayer(l => layers.push(l));
+    if (layers.length === 0) return false;
+    map.fitBounds(L.featureGroup(layers).getBounds().pad(0.15));
+    return true;
   }
 
   function deserializeState(json){
@@ -1748,6 +1760,7 @@
       }
       rebuildAllPanelsAndOverlaps();
       updateSideButtons();
+      if (data.center) map.setView(data.center, data.zoom ?? 17);
       return true;
     } catch(e){
       console.warn("Deserialize mislukt:", e);
@@ -1767,13 +1780,20 @@
   }
 
   UI.exportBtn.onclick = () => {
+    const name = prompt("Bestandsnaam:", "carport-ontwerp");
+    if (name === null) return;
+    const filename = (name.trim() || "carport-ontwerp") + ".json";
     const blob = new Blob([serializeState()], { type: "application/json" });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
     a.href = url;
-    a.download = "carport-ontwerp.json";
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  UI.zoomFitBtn.onclick = () => {
+    if (!zoomToFit()) showSaveStatus("Niets getekend om op in te zoomen.");
   };
 
   UI.importBtn.onclick = () => {
