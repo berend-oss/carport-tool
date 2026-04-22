@@ -357,14 +357,7 @@
         <div class="ui-divider"></div>
 
         <div class="ui-row">
-          <div>
-            <div class="ui-small" style="margin-bottom:6px;">Zijde (geselecteerde carport)</div>
-            <div class="pill">
-              <button id="uiSideLeft" type="button">Links</button>
-              <button id="uiSideRight" type="button">Rechts</button>
-              <button id="uiSideBoth" type="button">Beide</button>
-            </div>
-          </div>
+          <button id="uiCopy" class="btn" type="button">📋 Kopieer luifel</button>
         </div>
 
         <div class="ui-divider"></div>
@@ -388,13 +381,10 @@
   UI.importBtn      = document.getElementById("uiImport");
   UI.zoomFitBtn     = document.getElementById("uiZoomFit");
   UI.saveStatus     = document.getElementById("uiSaveStatus");
+  UI.copyBtn        = document.getElementById("uiCopy");
 
   UI.addrInput = document.getElementById("uiAddress");
   UI.suggEl    = document.getElementById("uiSuggestions");
-
-  UI.sideLeft  = document.getElementById("uiSideLeft");
-  UI.sideRight = document.getElementById("uiSideRight");
-  UI.sideBoth  = document.getElementById("uiSideBoth");
 
   UI.totalsEl  = document.getElementById("uiTotals");
 
@@ -408,6 +398,7 @@
       adjustOn = false;
       carportDisableAllEdits();
       pergolaClearUi();
+      carportRemoveSidePicker();
       carportRenderLengthLabel();
     } else {
       carportSyncEditingState();
@@ -415,24 +406,105 @@
     }
   }
 
-  function updateSideButtons(){
-    const cp = selectedCarportId ? carports.get(selectedCarportId) : null;
-    const modeVal = cp ? cp.sideMode : "left";
-    UI.sideLeft.classList.toggle("active", modeVal === "left");
-    UI.sideRight.classList.toggle("active", modeVal === "right");
-    UI.sideBoth.classList.toggle("active", modeVal === "both");
+  /* ===================== SIDE PICKER ===================== */
+  const sidePickerLayer = L.layerGroup().addTo(map);
+
+  function carportRemoveSidePicker(){ sidePickerLayer.clearLayers(); }
+
+  function carportShowSidePicker(id){
+    carportRemoveSidePicker();
+    if (!id || mode === "delete") return;
+    const cp = carports.get(id);
+    if (!cp) return;
+    const ll = cp.layer.getLatLngs();
+    if (!ll || ll.length < 2) return;
+    const A = ll[0], B = ll[1];
+    const bearing = bearingBetweenLL(A, B);
+    const midPt = turf.midpoint(turf.point([A.lng,A.lat]), turf.point([B.lng,B.lat])).geometry.coordinates;
+    const midLL = L.latLng(midPt[1], midPt[0]);
+
+    const pL = bearing - 90, pR = bearing + 90;
+    const leftLL  = destinationFromLL(midLL, 4.5, pL);
+    const vLL     = destinationFromLL(midLL, 1.5, pL);
+    const moveLL  = destinationFromLL(midLL, 1.5, pR);
+    const rightLL = destinationFromLL(midLL, 4.5, pR);
+
+    // rotation for ▲ (base = north = 0°): rotate to point perpendicular-outward
+    const lRot = (pL + 360) % 360;
+    const rRot = (pR + 360) % 360;
+
+    function arrowSvg(rot, active){
+      const c = active ? '#fff' : '#1f4f99';
+      return `<svg width="13" height="13" viewBox="0 0 12 12">
+        <polygon points="6,0 12,12 0,12" fill="${c}" transform="rotate(${rot},6,6)"/>
+      </svg>`;
+    }
+
+    function makeSideBtn(latlng, html, sideMode){
+      const active = cp.sideMode === sideMode;
+      const mk = L.marker(latlng, { interactive:true, icon: L.divIcon({
+        className:'',
+        html:`<div style="width:32px;height:32px;background:${active?'#1f4f99':'rgba(255,255,255,0.96)'};
+          border:2px solid #1f4f99;border-radius:7px;display:flex;align-items:center;
+          justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.22);cursor:pointer;user-select:none;">
+          ${html}</div>`,
+        iconSize:[32,32], iconAnchor:[16,16]
+      })});
+      mk.on('click', (e) => { L.DomEvent.stopPropagation(e); updateSelectedSide(sideMode); });
+      return mk;
+    }
+
+    const vActive = cp.sideMode === 'both';
+    const vHtml = `<span style="font-size:13px;font-weight:900;color:${vActive?'#fff':'#1f4f99'};">V</span>`;
+
+    // Move handle
+    const mvHandle = L.marker(moveLL, { draggable:true, interactive:true, icon: L.divIcon({
+      className:'',
+      html:`<div style="width:30px;height:30px;background:rgba(255,255,255,0.96);border:2px solid #888;
+        border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;
+        cursor:grab;box-shadow:0 2px 6px rgba(0,0,0,0.2);user-select:none;">✥</div>`,
+      iconSize:[30,30], iconAnchor:[15,15]
+    })});
+    mvHandle.on('click', (e) => L.DomEvent.stopPropagation(e));
+    mvHandle.on('mousedown', (e) => L.DomEvent.stopPropagation(e));
+
+    let prevMvPos = null;
+    mvHandle.on('dragstart', () => {
+      prevMvPos = mvHandle.getLatLng();
+      suppressNextMapClick = true;
+      try { map.dragging.disable(); } catch {}
+    });
+    mvHandle.on('drag', () => {
+      const cur = mvHandle.getLatLng();
+      const pPrev = proj(prevMvPos), pCur = proj(cur);
+      const dx = pCur.x - pPrev.x, dy = pCur.y - pPrev.y;
+      const curLL = cp.layer.getLatLngs();
+      cp.layer.setLatLngs([
+        unproj({ x: proj(curLL[0]).x+dx, y: proj(curLL[0]).y+dy }),
+        unproj({ x: proj(curLL[1]).x+dx, y: proj(curLL[1]).y+dy })
+      ]);
+      prevMvPos = cur;
+      carportRedrawPanels(id); recomputeOverlaps(); applyStyles(); updateTotals();
+    });
+    mvHandle.on('dragend', () => {
+      try { map.dragging.enable(); } catch {}
+      setTimeout(() => { suppressNextMapClick = false; }, 80);
+      rebuildAllPanelsAndOverlaps(); saveToLocalStorage();
+    });
+
+    sidePickerLayer.addLayer(makeSideBtn(leftLL,  arrowSvg(lRot, cp.sideMode==='left'),  'left'));
+    sidePickerLayer.addLayer(makeSideBtn(vLL,     vHtml,                                  'both'));
+    sidePickerLayer.addLayer(mvHandle);
+    sidePickerLayer.addLayer(makeSideBtn(rightLL, arrowSvg(rRot, cp.sideMode==='right'), 'right'));
   }
+
+  function updateSideButtons(){ carportShowSidePicker(selectedCarportId); }
 
   function updateSelectedSide(modeVal){
     if (!selectedCarportId) return;
-    const cp = carports.get(selectedCarportId);
-    cp.sideMode = modeVal;
+    carports.get(selectedCarportId).sideMode = modeVal;
     rebuildAllPanelsAndOverlaps();
-    updateSideButtons();
   }
-  UI.sideLeft.onclick  = () => updateSelectedSide("left");
-  UI.sideRight.onclick = () => updateSelectedSide("right");
-  UI.sideBoth.onclick  = () => updateSelectedSide("both");
 
   UI.deleteBtn.onclick = () => setMode(mode === "delete" ? "select" : "delete");
 
@@ -970,12 +1042,12 @@
     if (selectedCarportId === carportId){
       selectedCarportId = null;
       lengthLabelLayer.clearLayers();
+      carportRemoveSidePicker();
       adjustOn = false;
       carportDisableAllEdits();
     }
 
     rebuildAllPanelsAndOverlaps();
-    updateSideButtons();
   }
 
   map.on(L.Draw.Event.CREATED, (e) => {
@@ -1667,11 +1739,38 @@
     }
   }
 
+  /* ===================== COPY ===================== */
+  function carportCopySelected(){
+    if (!selectedCarportId) return;
+    const cp = carports.get(selectedCarportId);
+    if (!cp) return;
+    const ll = cp.layer.getLatLngs();
+    if (!ll || ll.length < 2) return;
+    const bearing = bearingBetweenLL(ll[0], ll[1]);
+    const newA = destinationFromLL(ll[0], 5, bearing + 90);
+    const newB = destinationFromLL(ll[1], 5, bearing + 90);
+    const layer = L.polyline([newA, newB], STYLE_LINE_NORMAL);
+    const id = String(carportIdCounter++);
+    layer._carportId = id;
+    carportLines.addLayer(layer);
+    carports.set(id, { layer, sideMode: cp.sideMode });
+    carportAttachEvents(layer, id);
+    carportSelect(id);
+    rebuildAllPanelsAndOverlaps();
+  }
+
+  UI.copyBtn.onclick = () => carportCopySelected();
+
   /* ===================== Keyboard ===================== */
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       stopPergolaDraw();
       if (mode === "delete") setMode("select");
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === "d") {
+      e.preventDefault();
+      carportCopySelected();
       return;
     }
     if (e.key === "Delete") {
@@ -1695,6 +1794,7 @@
     pergolas.clear();
     lengthLabelLayer.clearLayers();
     pergolaClearUi();
+    carportRemoveSidePicker();
     overlappedPanelIds.clear();
     selectedCarportId = null;
     selectedPergolaId = null;
