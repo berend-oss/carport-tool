@@ -1545,15 +1545,33 @@
 
   /* ===================== BUILDING HEIGHT LOOKUP ===================== */
 
+  function toRD(lat, lon){
+    const dLat = 0.36 * (lat - 52.15517440);
+    const dLon = 0.36 * (lon - 5.38720621);
+    const x = 155000
+      + 190094.945*dLon - 11832.228*dLon*dLat - 114.221*dLon*dLat*dLat
+      - 32.391*dLon*dLon*dLon - 0.705*dLat - 2.340*dLon*dLon*dLat;
+    const y = 463000
+      + 309056.544*dLat + 73839.316*dLon*dLon - 55146.490*dLat*dLat
+      - 2659.985*dLon*dLon*dLat + 3976.686*dLat*dLat*dLat;
+    return { x: Math.round(x), y: Math.round(y) };
+  }
+
   async function query3dBagHeight(latlng){
-    const d = 0.0003;
-    const bbox = `${latlng.lng-d},${latlng.lat-d},${latlng.lng+d},${latlng.lat+d}`;
+    const d = 50; // metres in RD New
+    const c = toRD(latlng.lat, latlng.lng);
+    const bbox = `${c.x-d},${c.y-d},${c.x+d},${c.y+d}`;
     const apiUrl = `https://api.3dbag.nl/collections/pand/items?bbox=${bbox}&limit=1&f=json`;
     const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`);
     if (!res.ok) throw new Error(`3dbag ${res.status}`);
     const data = await res.json();
-    const p = data?.features?.[0]?.properties;
+
+    // try GeoJSON properties first, then CityJSON attributes
+    const feat = data?.features?.[0];
+    const p = feat?.properties
+      ?? feat?.feature?.CityObjects?.[Object.keys(feat?.feature?.CityObjects ?? {})[0]]?.attributes;
     if (!p) return null;
+
     const dak      = p["b3_h_dak_50p"];
     const maaiveld = p["b3_h_maaiveld"];
     if (dak == null) return null;
