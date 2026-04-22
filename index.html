@@ -348,6 +348,14 @@
         <div class="ui-divider"></div>
 
         <div class="ui-row">
+          <button id="uiExport" class="btn" type="button">📤 Exporteren</button>
+          <button id="uiImport" class="btn" type="button">📂 Importeren</button>
+        </div>
+        <div id="uiSaveStatus" class="ui-small" style="color:#888; min-height:16px; margin-top:4px;"></div>
+
+        <div class="ui-divider"></div>
+
+        <div class="ui-row">
           <div>
             <div class="ui-small" style="margin-bottom:6px;">Zijde (geselecteerde carport)</div>
             <div class="pill">
@@ -375,6 +383,9 @@
   UI.drawPergolaBtn = document.getElementById("uiDrawPergola");
   UI.deleteBtn      = document.getElementById("uiDelete");
   UI.clearBtn       = document.getElementById("uiClear");
+  UI.exportBtn      = document.getElementById("uiExport");
+  UI.importBtn      = document.getElementById("uiImport");
+  UI.saveStatus     = document.getElementById("uiSaveStatus");
 
   UI.addrInput = document.getElementById("uiAddress");
   UI.suggEl    = document.getElementById("uiSuggestions");
@@ -640,6 +651,8 @@
       carportRemoveMiddleMarkersRuntime(layer);
       carportApplyEndpointNumbering(layer);
     }
+
+    saveToLocalStorage();
   }
 
   /* ============================================================
@@ -1580,23 +1593,25 @@
     const icon = L.divIcon({
       className: "",
       html: `
-        <div style="
-          width:28px; height:28px;
-          background:#1f4f99;
-          border:2.5px solid #fff;
-          border-radius:50%;
-          box-shadow:0 2px 8px rgba(0,0,0,0.35);
-          display:flex; align-items:center; justify-content:center;
-          color:#fff; font-size:13px; font-weight:800;
-        ">${n}</div>
-        <div style="
-          margin-top:3px;
-          background:rgba(0,0,0,0.72);
-          color:#fff; font-size:11px; font-weight:600;
-          padding:2px 6px; border-radius:8px;
-          white-space:nowrap; text-align:center;
-        ">${h.toFixed(2)} m NAP</div>`,
-      iconSize: [60, 52], iconAnchor: [14, 14]
+        <div style="position:relative; width:20px; height:20px;">
+          <div style="
+            width:20px; height:20px;
+            background:#1f4f99;
+            border:2px solid #fff;
+            border-radius:50%;
+            box-shadow:0 2px 6px rgba(0,0,0,0.35);
+            display:flex; align-items:center; justify-content:center;
+            color:#fff; font-size:11px; font-weight:800;
+          ">${n}</div>
+          <div style="
+            position:absolute; top:24px; left:50%; transform:translateX(-50%);
+            background:rgba(0,0,0,0.72);
+            color:#fff; font-size:11px; font-weight:600;
+            padding:2px 6px; border-radius:6px;
+            white-space:nowrap;
+          ">${h.toFixed(2)} m NAP</div>
+        </div>`,
+      iconSize: [20, 20], iconAnchor: [10, 10]
     });
     return L.marker(latlng, { interactive: false, icon });
   }
@@ -1666,35 +1681,117 @@
   });
 
   /* ===================== CLEAR ===================== */
-  UI.clearBtn.onclick = () => {
+  function clearAll(){
     stopPergolaDraw();
-
     carportLines.clearLayers();
     for (const g of panelGroups.values()) { g.clearLayers(); map.removeLayer(g); }
     panelGroups.clear();
     carports.clear();
-
     pergolaShapes.clearLayers();
     for (const g of pergolaPanels.values()) { g.clearLayers(); map.removeLayer(g); }
     pergolaPanels.clear();
     pergolas.clear();
-
     lengthLabelLayer.clearLayers();
     pergolaClearUi();
-
     overlappedPanelIds.clear();
-
     selectedCarportId = null;
     selectedPergolaId = null;
-
     carportIdCounter = 1;
     pergolaIdCounter = 1;
     adjustOn = false;
-
     setMode("select");
     applyStyles();
     updateTotals();
     updateSideButtons();
+  }
+
+  UI.clearBtn.onclick = () => { clearAll(); saveToLocalStorage(); };
+
+  /* ===================== SAVE / LOAD ===================== */
+  const STORAGE_KEY = "carport-tool-v1";
+  let saveStatusTimer = null;
+
+  function showSaveStatus(msg){
+    UI.saveStatus.textContent = msg;
+    clearTimeout(saveStatusTimer);
+    saveStatusTimer = setTimeout(() => { UI.saveStatus.textContent = ""; }, 3000);
+  }
+
+  function serializeState(){
+    const out = { v: 1, carports: [], pergolas: [] };
+    for (const [, cp] of carports.entries()){
+      const ll = cp.layer.getLatLngs();
+      out.carports.push({ latlngs: ll.map(p => [p.lat, p.lng]), sideMode: cp.sideMode });
+    }
+    for (const [, pg] of pergolas.entries()){
+      out.pergolas.push({ A: [pg.A.lat, pg.A.lng], B: [pg.B.lat, pg.B.lng], lsm: pg.lengthSignedM });
+    }
+    return JSON.stringify(out);
+  }
+
+  function deserializeState(json){
+    try {
+      const data = JSON.parse(json);
+      if (!data || data.v !== 1) return false;
+      clearAll();
+      for (const cp of data.carports || []){
+        const latlngs = cp.latlngs.map(p => L.latLng(p[0], p[1]));
+        const layer = L.polyline(latlngs, STYLE_LINE_NORMAL);
+        const id = String(carportIdCounter++);
+        layer._carportId = id;
+        carportLines.addLayer(layer);
+        carports.set(id, { layer, sideMode: cp.sideMode || "left" });
+        carportAttachEvents(layer, id);
+      }
+      for (const pg of data.pergolas || []){
+        pergolaCreate(L.latLng(pg.A[0], pg.A[1]), L.latLng(pg.B[0], pg.B[1]), pg.lsm);
+      }
+      rebuildAllPanelsAndOverlaps();
+      updateSideButtons();
+      return true;
+    } catch(e){
+      console.warn("Deserialize mislukt:", e);
+      return false;
+    }
+  }
+
+  function saveToLocalStorage(){
+    try { localStorage.setItem(STORAGE_KEY, serializeState()); } catch(e){}
+  }
+
+  function loadFromLocalStorage(){
+    try {
+      const json = localStorage.getItem(STORAGE_KEY);
+      if (json) deserializeState(json);
+    } catch(e){}
+  }
+
+  UI.exportBtn.onclick = () => {
+    const blob = new Blob([serializeState()], { type: "application/json" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url;
+    a.download = "carport-ontwerp.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  UI.importBtn.onclick = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const ok = deserializeState(ev.target.result);
+        if (ok) { saveToLocalStorage(); showSaveStatus("✓ Ontwerp geladen"); }
+        else    { showSaveStatus("✗ Ongeldig bestand"); }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
   };
 
   /* ===================== Address autocomplete ===================== */
@@ -1767,6 +1864,7 @@
   setMode("select");
   updateSideButtons();
   updateTotals();
+  loadFromLocalStorage();
 </script>
 </body>
 </html>
