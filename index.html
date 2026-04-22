@@ -257,6 +257,7 @@
     ahnLayerActive = false;
     ahnPoint1 = null;
     if (ahnMarker1) { map.removeLayer(ahnMarker1); ahnMarker1 = null; }
+    if (ahnMarker2) { map.removeLayer(ahnMarker2); ahnMarker2 = null; }
     document.getElementById("ahnLegend").style.display = "none";
   });
 
@@ -300,6 +301,7 @@
   let ahnLayerActive = false;
   let ahnPoint1 = null;
   let ahnMarker1 = null;
+  let ahnMarker2 = null;
 
   const pergolaDraw = { active:false, step:0, A:null, B:null, snappedC:null, mA:null, mB:null, mC:null };
 
@@ -1570,43 +1572,78 @@
     const res = await fetch(url);
     if (!res.ok) return null;
     const text = await res.text();
-    const m = text.match(/-?[\d]+\.[\d]+|-?[\d]+/);
-    return m ? parseFloat(m[0]) : null;
+    const m = text.match(/value_list\s*=\s*'(-?[\d.]+)/);
+    return m ? parseFloat(m[1]) : null;
+  }
+
+  function ahnMakeMarker(latlng, n, h){
+    const icon = L.divIcon({
+      className: "",
+      html: `
+        <div style="
+          width:28px; height:28px;
+          background:#1f4f99;
+          border:2.5px solid #fff;
+          border-radius:50%;
+          box-shadow:0 2px 8px rgba(0,0,0,0.35);
+          display:flex; align-items:center; justify-content:center;
+          color:#fff; font-size:13px; font-weight:800;
+        ">${n}</div>
+        <div style="
+          margin-top:3px;
+          background:rgba(0,0,0,0.72);
+          color:#fff; font-size:11px; font-weight:600;
+          padding:2px 6px; border-radius:8px;
+          white-space:nowrap; text-align:center;
+        ">${h.toFixed(2)} m NAP</div>`,
+      iconSize: [60, 52], iconAnchor: [14, 14]
+    });
+    return L.marker(latlng, { interactive: false, icon });
   }
 
   async function ahnClick(latlng){
     if (!ahnLayerActive) return;
     try {
+      // reset if both points already set
+      if (ahnPoint1 && ahnMarker2) {
+        map.removeLayer(ahnMarker1); ahnMarker1 = null;
+        map.removeLayer(ahnMarker2); ahnMarker2 = null;
+        ahnPoint1 = null;
+      }
+
       const h = await ahnGetValue(latlng);
       if (h == null) return;
 
       if (!ahnPoint1) {
         ahnPoint1 = { latlng, h };
-        ahnMarker1 = L.marker(latlng, {
-          interactive: false,
-          icon: L.divIcon({
-            className: "",
-            html: `<div class="len-label"><span>Punt 1: ${h.toFixed(1)} m</span></div>`,
-            iconSize: [130, 30], iconAnchor: [65, 15]
-          })
-        }).addTo(map);
+        ahnMarker1 = ahnMakeMarker(latlng, 1, h).addTo(map);
       } else {
-        const diff = (h - ahnPoint1.h);
+        const diff = h - ahnPoint1.h;
         const sign = diff > 0 ? "+" : "";
-        L.popup({ closeButton: true })
+        const diffColor = diff > 0 ? "#1a7a3c" : diff < 0 ? "#b00020" : "#444";
+
+        ahnMarker2 = ahnMakeMarker(latlng, 2, h).addTo(map);
+
+        L.popup({ closeButton: true, offset: [0, -4] })
           .setLatLng(latlng)
           .setContent(`
-            <div style="font-size:13px; line-height:1.8;">
-              <b>Hoogteverschil (AHN4)</b><br>
-              Punt 1: <b>${ahnPoint1.h.toFixed(1)} m</b> NAP<br>
-              Punt 2: <b>${h.toFixed(1)} m</b> NAP<br>
-              <div style="border-top:1px solid #eee; margin-top:4px; padding-top:4px;">
-                Verschil: <b>${sign}${diff.toFixed(1)} m</b>
+            <div style="font-size:13px; line-height:1.9; min-width:160px;">
+              <div style="font-weight:800; margin-bottom:4px;">Hoogteverschil</div>
+              <div style="display:flex; justify-content:space-between; gap:12px;">
+                <span style="color:#555;">Punt 1</span>
+                <b>${ahnPoint1.h.toFixed(2)} m NAP</b>
+              </div>
+              <div style="display:flex; justify-content:space-between; gap:12px;">
+                <span style="color:#555;">Punt 2</span>
+                <b>${h.toFixed(2)} m NAP</b>
+              </div>
+              <div style="border-top:1px solid #eee; margin-top:6px; padding-top:6px;
+                          display:flex; justify-content:space-between; gap:12px;">
+                <span style="color:#555;">Verschil</span>
+                <b style="color:${diffColor};">${sign}${diff.toFixed(2)} m</b>
               </div>
             </div>`)
           .openOn(map);
-        map.removeLayer(ahnMarker1); ahnMarker1 = null;
-        ahnPoint1 = null;
       }
     } catch(err) {
       console.warn("AHN hoogte query mislukt:", err);
