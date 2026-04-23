@@ -483,15 +483,60 @@
     <p>Handig voor het inschatten van hoogteverschillen over een parkeerterrein.</p>
   </div>
 
+  <!-- METEN -->
+  <div class="help-sec">
+    <h3>📏 Afstanden meten</h3>
+    <ol class="help-stps">
+      <li>Klik op <strong>📏</strong> in de toolbar (of druk <span class="help-kbd">M</span>) — de cursor verandert in een kruisje</li>
+      <li>Klik op de kaart om het <strong>startpunt</strong> te plaatsen</li>
+      <li>Klik op meer punten om een route te meten — elke segment toont zijn afstand</li>
+      <li><strong>Dubbelklik</strong> om te stoppen — het totaal blijft zichtbaar op de kaart</li>
+    </ol>
+    <div class="help-row">
+      <figure class="help-fig" style="flex:2;">
+        <svg viewBox="0 0 260 90" style="width:100%;max-width:260px;display:block;margin:0 auto;">
+          <!-- Measurement line segments -->
+          <line x1="20" y1="60" x2="100" y2="35" stroke="#e63939" stroke-width="2" stroke-dasharray="7,5"/>
+          <line x1="100" y1="35" x2="190" y2="55" stroke="#e63939" stroke-width="2" stroke-dasharray="7,5"/>
+          <line x1="190" y1="55" x2="240" y2="30" stroke="#e63939" stroke-width="2" stroke-dasharray="7,5" opacity=".45"/>
+          <!-- Start dot (blue) -->
+          <circle cx="20" cy="60" r="6" fill="#1f4f99" stroke="#fff" stroke-width="2"/>
+          <!-- Waypoint dots (red) -->
+          <circle cx="100" cy="35" r="5" fill="#e63939" stroke="#fff" stroke-width="2"/>
+          <circle cx="190" cy="55" r="5" fill="#e63939" stroke="#fff" stroke-width="2"/>
+          <!-- Cursor dot (last) -->
+          <circle cx="240" cy="30" r="4" fill="#e63939" stroke="#fff" stroke-width="2" opacity=".55"/>
+          <!-- Segment labels -->
+          <rect x="44" y="40" width="48" height="16" rx="5" fill="rgba(0,0,0,.72)"/>
+          <text x="68" y="52" text-anchor="middle" font-size="9" fill="#fff" font-family="system-ui" font-weight="700">28.4 m</text>
+          <rect x="128" y="37" width="48" height="16" rx="5" fill="rgba(0,0,0,.72)"/>
+          <text x="152" y="49" text-anchor="middle" font-size="9" fill="#fff" font-family="system-ui" font-weight="700">46.1 m</text>
+          <!-- Total label -->
+          <rect x="148" y="62" width="86" height="20" rx="7" fill="#1f4f99"/>
+          <text x="191" y="76" text-anchor="middle" font-size="10" fill="#fff" font-family="system-ui" font-weight="800">Totaal: 74.5 m</text>
+        </svg>
+        <figcaption>Klik punten om te meten; elk segment toont de afstand; totaal bij het laatste punt</figcaption>
+      </figure>
+    </div>
+    <ul>
+      <li>Elk <strong>tussenpunt</strong> toont de afstand van dat segment</li>
+      <li>Het <strong>blauwe startpunt</strong> en rode meetpunten blijven zichtbaar tot je stopt</li>
+      <li><strong>Dubbelklik</strong> om de meting af te ronden — resultaat blijft op de kaart</li>
+      <li>Klik nogmaals op <strong>📏</strong> of druk <span class="help-kbd">Esc</span> om de meting te wissen</li>
+    </ul>
+    <div class="help-note">De meetlijn interfereert niet met luifels of pergola's — je kunt gewoon doortekenen na het meten.</div>
+  </div>
+
   <!-- SHORTCUTS -->
   <div class="help-sec">
     <h3>⌨️ Toetsenbord sneltoetsen</h3>
     <ul>
       <li><span class="help-kbd">L</span> — Start luifel tekenen</li>
       <li><span class="help-kbd">P</span> — Start pergola tekenen</li>
+      <li><span class="help-kbd">M</span> — Start/stop meten</li>
       <li><span class="help-kbd">Ctrl+D</span> — Kopieer geselecteerde luifel of pergola</li>
       <li><span class="help-kbd">Delete</span> / <span class="help-kbd">Backspace</span> — Verwijder geselecteerde luifel of pergola</li>
-      <li><span class="help-kbd">Esc</span> — Annuleer actieve tekenmodus of verwijdermodus</li>
+      <li><span class="help-kbd">Esc</span> — Annuleer actieve tekenmodus, meetmodus of verwijdermodus</li>
     </ul>
   </div>
 
@@ -638,6 +683,9 @@
 
   const overlappedPanelIds = new Set();
 
+  const measureLayer = L.layerGroup().addTo(map);
+  let measurePreviewLine = null;
+
   /* ===================== STATE ===================== */
   let carportIdCounter = 1;
   let pergolaIdCounter = 1;
@@ -655,6 +703,9 @@
   let ahnPoint1 = null;
   let ahnMarker1 = null;
   let ahnMarker2 = null;
+
+  let measureMode = false;
+  let measurePoints = [];
 
   const pergolaDraw = { active:false, step:0, A:null, B:null, snappedC:null, mA:null, mB:null, mC:null };
 
@@ -704,6 +755,7 @@
           <button id="uiImport" class="btn tip-btn" type="button" data-tip="Importeer ontwerp vanuit JSON-bestand" style="flex:1;font-size:16px;padding:7px 4px;">📂</button>
           <button id="uiZoomFit" class="btn tip-btn" type="button" data-tip="Zoom naar alle objecten op de kaart" style="flex:1;font-size:16px;padding:7px 4px;">🎯</button>
           <button id="uiCopy" class="btn tip-btn" type="button" data-tip="Kopieer de geselecteerde luifel of pergola" style="flex:1;font-size:16px;padding:7px 4px;">📋</button>
+          <button id="uiMeasure" class="btn tip-btn" type="button" data-tip="Meet afstanden op de kaart (M)" style="flex:1;font-size:16px;padding:7px 4px;">📏</button>
         </div>
 
         <div id="uiSaveStatus" class="ui-small" style="color:#888;min-height:14px;margin-top:4px;font-size:11px;"></div>
@@ -733,6 +785,7 @@
   UI.zoomFitBtn     = document.getElementById("uiZoomFit");
   UI.saveStatus     = document.getElementById("uiSaveStatus");
   UI.copyBtn        = document.getElementById("uiCopy");
+  UI.measureBtn     = document.getElementById("uiMeasure");
 
   UI.addrInput = document.getElementById("uiAddress");
   UI.suggEl    = document.getElementById("uiSuggestions");
@@ -2033,6 +2086,14 @@
   }
 
   map.on("mousemove", (e) => {
+    if (measureMode && measurePoints.length > 0){
+      const last = measurePoints[measurePoints.length - 1];
+      if (!measurePreviewLine){
+        measurePreviewLine = L.polyline([last, e.latlng], { color:'#e63939', weight:2, opacity:.55, dashArray:'5,5' }).addTo(map);
+      } else {
+        measurePreviewLine.setLatLngs([last, e.latlng]);
+      }
+    }
     if (!pergolaDraw.active) return;
     updatePergolaPreview(e.latlng);
     pergolaTipShow(e.latlng);
@@ -2041,6 +2102,12 @@
   map.on("click", (e) => {
     if (suppressNextMapClick) return;
     if (mode === "delete") return;
+
+    if (measureMode){
+      measurePoints.push(e.latlng);
+      measureRedraw();
+      return;
+    }
 
     if (pergolaDraw.active){
       if (pergolaDraw.step === 0){
@@ -2196,6 +2263,92 @@
     }
   }
 
+  /* ===================== MEASURE ===================== */
+  function formatDist(meters){
+    if (meters >= 1000) return (meters / 1000).toFixed(2) + ' km';
+    if (meters >= 100)  return meters.toFixed(0) + ' m';
+    return meters.toFixed(1) + ' m';
+  }
+
+  function measureRedraw(){
+    measureLayer.clearLayers();
+    const pts = measurePoints;
+    if (pts.length === 0) return;
+
+    for (let i = 0; i < pts.length; i++){
+      const first = i === 0;
+      const dotHtml = `<div style="
+        width:${first ? 11 : 9}px; height:${first ? 11 : 9}px;
+        background:${first ? '#1f4f99' : '#e63939'};
+        border:2px solid #fff; border-radius:50%;
+        box-shadow:0 2px 6px rgba(0,0,0,.35);
+      "></div>`;
+      L.marker(pts[i], { interactive:false, icon: L.divIcon({ className:'', html:dotHtml, iconSize:[11,11], iconAnchor:[5,5] }) })
+        .addTo(measureLayer);
+    }
+
+    let total = 0;
+    for (let i = 1; i < pts.length; i++){
+      const d = distanceM(pts[i-1], pts[i]);
+      total += d;
+      L.polyline([pts[i-1], pts[i]], { color:'#e63939', weight:2, opacity:.85, dashArray:'7,5' }).addTo(measureLayer);
+
+      const mid = L.latLng((pts[i-1].lat + pts[i].lat)/2, (pts[i-1].lng + pts[i].lng)/2);
+      const segHtml = `<div style="
+        background:rgba(0,0,0,.72); color:#fff; font-size:11px; font-weight:600;
+        padding:2px 7px; border-radius:6px; white-space:nowrap; pointer-events:none;
+      ">${formatDist(d)}</div>`;
+      L.marker(mid, { interactive:false, icon: L.divIcon({ className:'', html:segHtml, iconSize:[null,null], iconAnchor:[-4,8] }) })
+        .addTo(measureLayer);
+    }
+
+    if (pts.length >= 2){
+      const totalHtml = `<div style="
+        background:#1f4f99; color:#fff; font-size:12px; font-weight:800;
+        padding:4px 10px; border-radius:8px; white-space:nowrap; pointer-events:none;
+        box-shadow:0 2px 8px rgba(0,0,0,.3);
+      ">Totaal: ${formatDist(total)}</div>`;
+      L.marker(pts[pts.length-1], { interactive:false, icon: L.divIcon({ className:'', html:totalHtml, iconSize:[null,null], iconAnchor:[-4,-2] }) })
+        .addTo(measureLayer);
+    }
+  }
+
+  function startMeasure(){
+    stopPergolaDraw();
+    if (activeCarportDraw){ try { activeCarportDraw.disable(); } catch {} activeCarportDraw = null; }
+    setMode("select");
+    measureMode = true;
+    measurePoints = [];
+    measureLayer.clearLayers();
+    if (measurePreviewLine){ map.removeLayer(measurePreviewLine); measurePreviewLine = null; }
+    map.doubleClickZoom.disable();
+    map.getContainer().style.cursor = 'crosshair';
+    UI.measureBtn.classList.add('active');
+  }
+
+  function stopMeasure(keepResult){
+    measureMode = false;
+    if (!keepResult){ measurePoints = []; measureLayer.clearLayers(); }
+    if (measurePreviewLine){ map.removeLayer(measurePreviewLine); measurePreviewLine = null; }
+    map.doubleClickZoom.enable();
+    map.getContainer().style.cursor = '';
+    if (UI.measureBtn) UI.measureBtn.classList.remove('active');
+  }
+
+  UI.measureBtn.onclick = () => {
+    if (measureMode) stopMeasure(false);
+    else startMeasure();
+  };
+
+  map.on("dblclick", (e) => {
+    if (!measureMode) return;
+    L.DomEvent.stopPropagation(e);
+    if (measurePoints.length > 0) measurePoints.pop();
+    if (measurePreviewLine){ map.removeLayer(measurePreviewLine); measurePreviewLine = null; }
+    measureRedraw();
+    stopMeasure(true);
+  });
+
   /* ===================== COPY ===================== */
   function carportCopySelected(){
     if (!selectedCarportId) return;
@@ -2240,6 +2393,7 @@
         document.getElementById('helpOverlay').style.display = 'none';
         return;
       }
+      if (measureMode){ stopMeasure(false); return; }
       stopPergolaDraw();
       if (mode === "delete") setMode("select");
       return;
@@ -2260,6 +2414,7 @@
     if (t2 && (t2.tagName === "INPUT" || t2.tagName === "TEXTAREA")) return;
     if (e.key === "l" || e.key === "L") { e.preventDefault(); UI.drawBtn.onclick(); }
     if (e.key === "p" || e.key === "P") { e.preventDefault(); UI.drawPergolaBtn.onclick(); }
+    if (e.key === "m" || e.key === "M") { e.preventDefault(); UI.measureBtn.onclick(); }
   });
 
   /* ===================== CLEAR ===================== */
