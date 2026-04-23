@@ -339,6 +339,7 @@
   const pergolaDrawMarkerLayer = L.layerGroup().addTo(map);
   let previewLine = null;
   let previewRect = null;
+  let previewCrossSection = null;
 
   const overlappedPanelIds = new Set();
 
@@ -1208,6 +1209,45 @@
     return { cols, rows };
   }
 
+  // Draws tent cross-section indicators just outside the DC edge.
+  // Each tent = 2 panels at 22 deg, tips toward each other, 4 m base.
+  // Returns array of added layers (for later removal in move-only updates).
+  function pergolaAddCrossSection(A, B, lengthSignedM, targetLayer){
+    const { bearing, perpBearing, lengthAbs } = pergolaCorners(A, B, lengthSignedM);
+    const breedte = distanceM(A, B);
+    const { cols } = pergolaColsRowsWith90Rule(breedte, lengthAbs);
+    if (cols <= 0 || lengthAbs < 0.01) return [];
+
+    const GAP = 0.5;
+    const HALF_BASE = PERG_PAIR_LEN_M / 2;
+    const TENT_H = HALF_BASE * Math.tan(22 * Math.PI / 180);
+
+    const basePerp = lengthAbs + GAP;
+    const apexPerp = basePerp + TENT_H;
+
+    const lineStyle = { color: '#1f4f99', weight: 1.5, opacity: 0.75, interactive: false };
+    const baseStyle = { color: '#1f4f99', weight: 1,   opacity: 0.4,  dashArray: '4,3', interactive: false };
+    const layers = [];
+
+    const baseOriginLL = destinationFromLL(A, basePerp, perpBearing);
+    const apexOriginLL = destinationFromLL(A, apexPerp, perpBearing);
+
+    for (let c = 0; c < cols; c++){
+      const lPt = destinationFromLL(baseOriginLL, c * PERG_PAIR_LEN_M,           bearing);
+      const rPt = destinationFromLL(baseOriginLL, (c + 1) * PERG_PAIR_LEN_M,     bearing);
+      const aPt = destinationFromLL(apexOriginLL, (c + 0.5) * PERG_PAIR_LEN_M,   bearing);
+
+      const lL = L.polyline([lPt, aPt], lineStyle);
+      const rL = L.polyline([rPt, aPt], lineStyle);
+      const bL = L.polyline([lPt, rPt], baseStyle);
+      targetLayer.addLayer(lL);
+      targetLayer.addLayer(rL);
+      targetLayer.addLayer(bL);
+      layers.push(lL, rL, bL);
+    }
+    return layers;
+  }
+
   function pergolaUpdatePolygonAndState(pergolaId, A, B, lengthSignedM){
     const pg = pergolas.get(pergolaId);
     if (!pg) return;
@@ -1345,7 +1385,8 @@
     aMarker:null, bMarker:null, cMarker:null,
     lblW:null, lblL:null,
     activeId:null,
-    wInputId:null, lInputId:null
+    wInputId:null, lInputId:null,
+    crossSectionLayers: []
   };
 
   function pergolaClearUi(){
@@ -1355,6 +1396,7 @@
     pergolaUi.activeId = null;
     pergolaUi.wInputId = null;
     pergolaUi.lInputId = null;
+    pergolaUi.crossSectionLayers = [];
     try { map.dragging.enable(); } catch {}
     stopCustomCDrag();
   }
@@ -1466,6 +1508,9 @@
       pergolaUi.lblW.setLatLng([midAB[1], midAB[0]]);
       pergolaUi.lblL.setLatLng([midBC[1], midBC[0]]);
       updatePergolaInputsIfPresent(breedte, lengte);
+
+      for (const l of pergolaUi.crossSectionLayers) pergolaUiLayer.removeLayer(l);
+      pergolaUi.crossSectionLayers = pergolaAddCrossSection(A, B, pg.lengthSignedM, pergolaUiLayer);
       return;
     }
 
@@ -1546,6 +1591,7 @@
     pergolaUi.cMarker = mC;
     pergolaUi.lblW = lblW;
     pergolaUi.lblL = lblL;
+    pergolaUi.crossSectionLayers = pergolaAddCrossSection(A, B, pg.lengthSignedM, pergolaUiLayer);
 
     setTimeout(() => {
       const wInp = document.getElementById(wId);
@@ -1632,6 +1678,7 @@
 
     if (previewLine) { pergolaPreviewLayer.removeLayer(previewLine); previewLine = null; }
     if (previewRect) { pergolaPreviewLayer.removeLayer(previewRect); previewRect = null; }
+    if (previewCrossSection) { pergolaPreviewLayer.removeLayer(previewCrossSection); previewCrossSection = null; }
     pergolaPreviewLayer.clearLayers();
 
     clearPergolaDrawMarkers();
@@ -1682,6 +1729,12 @@
     const { A:AA, B:BB, C, D } = pergolaCorners(A, B, signedMeters);
     if (!previewRect) previewRect = L.polygon([AA, BB, C, D], STYLE_PREVIEW_RECT).addTo(pergolaPreviewLayer);
     else previewRect.setLatLngs([AA, BB, C, D]);
+
+    if (previewCrossSection) { pergolaPreviewLayer.removeLayer(previewCrossSection); previewCrossSection = null; }
+    if (Math.abs(signedMeters) > 0.01){
+      previewCrossSection = L.layerGroup().addTo(pergolaPreviewLayer);
+      pergolaAddCrossSection(A, B, signedMeters, previewCrossSection);
+    }
   }
 
   map.on("mousemove", (e) => {
