@@ -351,6 +351,7 @@
 
   let mode = "select"; // select | delete
   let adjustOn = false;
+  let activeCarportDraw = null;
 
   let suppressNextMapClick = false;
 
@@ -415,7 +416,7 @@
           <div class="ui-divider"></div>
           <div id="uiTotals" class="ui-small"></div>
           <div style="margin-top:8px;">
-            <button id="uiCarportListBtn" class="btn tip-btn" type="button" data-tip="Toon een klikbare lijst van alle getekende luifels" style="width:100%;font-size:12px;padding:5px 8px;text-align:left;">🗂 Alle luifels ▾</button>
+            <button id="uiCarportListBtn" class="btn tip-btn" type="button" data-tip="Toon een klikbare lijst van alle luifels en pergola's" style="width:100%;font-size:12px;padding:5px 8px;text-align:left;">🗂 Alles ▾</button>
           </div>
           <div id="uiCarportListItems" style="display:none;margin-top:4px;max-height:180px;overflow-y:auto;"></div>
         </div>
@@ -457,15 +458,22 @@
     const isOpen = list.style.display !== 'none';
     list.style.display = isOpen ? 'none' : 'block';
     document.getElementById('uiCarportListBtn').innerHTML = isOpen
-      ? '🗂 Alle luifels ▾' : '🗂 Alle luifels ▴';
+      ? '🗂 Alles ▾' : '🗂 Alles ▴';
     if (!isOpen) renderCarportList();
   });
+
+  function stopActiveDrawAndSelect(selectFn){
+    if (activeCarportDraw){ try { activeCarportDraw.disable(); } catch {} activeCarportDraw = null; }
+    setMode('select');
+    selectFn();
+  }
 
   function renderCarportList(){
     const el = document.getElementById('uiCarportListItems');
     if (!el) return;
-    if (carports.size === 0){
-      el.innerHTML = '<div class="ui-small" style="padding:6px 4px;color:#aaa;">Geen luifels getekend.</div>';
+    const hasAnything = carports.size > 0 || pergolas.size > 0;
+    if (!hasAnything){
+      el.innerHTML = '<div class="ui-small" style="padding:6px 4px;color:#aaa;">Nog niets getekend.</div>';
       return;
     }
     el.innerHTML = '';
@@ -473,13 +481,22 @@
     for (const [id, cp] of carports.entries()){
       const st = computeCarportStats(id);
       const wp = cp.panelType === "small" ? CARPORT_SMALL_PANEL_WP : CARPORT_PANEL_WP;
-      const typeLabel = cp.panelType === "small" ? "Klein" : "Groot";
       const div = document.createElement('div');
       div.className = 'cp-list-item' + (id === selectedCarportId ? ' sel' : '');
-      div.innerHTML = `<b>Luifel ${i}</b> &nbsp;<span style="color:#888;font-weight:400;">${typeLabel} · ${st.panels}× ${wp}Wp · ${st.kwp.toFixed(2)} kWp</span>`;
-      div.addEventListener('click', () => { carportSelect(id); });
+      div.innerHTML = `<b>Luifel ${i}</b> &nbsp;<span style="color:#888;font-weight:400;">${st.panels}× ${wp}Wp &nbsp;· ${st.kwp.toFixed(2)} kWp</span>`;
+      div.addEventListener('click', () => stopActiveDrawAndSelect(() => carportSelect(id)));
       el.appendChild(div);
       i++;
+    }
+    let j = 1;
+    for (const [id] of pergolas.entries()){
+      const st = computePergolaStats(id);
+      const div = document.createElement('div');
+      div.className = 'cp-list-item' + (id === selectedPergolaId ? ' sel' : '');
+      div.innerHTML = `<b>Pergola ${j}</b> &nbsp;<span style="color:#888;font-weight:400;">${st.panels}× ${PERG_PANEL_WP}Wp &nbsp;· ${st.kwp.toFixed(2)} kWp</span>`;
+      div.addEventListener('click', () => stopActiveDrawAndSelect(() => pergolaSelect(id)));
+      el.appendChild(div);
+      j++;
     }
   }
 
@@ -868,7 +885,7 @@
       selectedLine = `Carport ${selectedCarportId}: <b>${st.panels}</b> panelen van ${wp}Wp &nbsp;• <b>${st.kwp.toFixed(2)}</b> kWp`;
     } else if (selectedPergolaId){
       const st = computePergolaStats(selectedPergolaId);
-      selectedLine = `Pergola ${selectedPergolaId}: <b>${st.panels}</b> panelen • <b>${st.kwp.toFixed(2)}</b> kWp`;
+      selectedLine = `Pergola ${selectedPergolaId}: <b>${st.panels}</b> panelen van ${PERG_PANEL_WP}Wp &nbsp;• <b>${st.kwp.toFixed(2)}</b> kWp`;
     }
 
     UI.totalsEl.innerHTML = `
@@ -1000,7 +1017,9 @@
     carportDisableAllEdits();
     pergolaClearUi();
     carportRenderLengthLabel();
-    new TwoPointPolyline(map, { shapeOptions: STYLE_LINE_NORMAL }).enable();
+    if (activeCarportDraw) { try { activeCarportDraw.disable(); } catch {} }
+    activeCarportDraw = new TwoPointPolyline(map, { shapeOptions: STYLE_LINE_NORMAL });
+    activeCarportDraw.enable();
   };
 
   function carportReplaceLineLayer(carportId, newLatLngs){
@@ -1132,6 +1151,7 @@
   }
 
   map.on(L.Draw.Event.CREATED, (e) => {
+    activeCarportDraw = null;
     const layer = e.layer;
     layer.setStyle(STYLE_LINE_NORMAL);
     carportLines.addLayer(layer);
