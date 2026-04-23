@@ -486,19 +486,11 @@
   <!-- ONDERGROND -->
   <div class="help-sec">
     <h3>🌱 Ondergrond (BRO)</h3>
-    <p>Activeer via het lagen-icoontje rechtsboven. Klik op de kaart voor info bij elk actief lagen.</p>
-    <div class="help-row" style="gap:10px;">
-      <div style="flex:1;min-width:160px;">
-        <p><strong>Bodemkaart (BRO)</strong><br>
-        Toont bodemtypen van Nederland (BRO/WUR, 1:50.000). <strong>Klik op de kaart</strong> → popup met bodemcode en volledige naam (bijv. <em>Kalkloze poldervaaggronden; zware klei</em>).</p>
-        <div class="help-note">⚠️ Bebouwde gebieden zijn bewust <em>niet</em> opgenomen — dit is een beperking van de dataset.</div>
-      </div>
-      <div style="flex:1;min-width:160px;">
-        <p><strong>Grondboringen (BRO BHR-GT)</strong><br>
-        Toont locaties van geotechnische boringen uit de Basisregistratie Ondergrond. <strong>Klik op een punt</strong> → popup met BRO-ID, boordiepte, datum en maaiveldhoogte (NAP). Zoek het BRO-ID op in DINOloket voor het volledige boorprofiel.</p>
-        <div class="help-note">💡 Zoom in voor meer detail — bij lage zoom worden punten samengevat.</div>
-      </div>
-    </div>
+    <p>Activeer <strong>Bodemkaart (BRO)</strong> via het lagen-icoontje rechtsboven. <strong>Klik op de kaart</strong> voor een popup met het bodemtype:</p>
+    <ul>
+      <li>🔴 Veengrond &nbsp;🟠 Kleigrond &nbsp;🟢 Zandgrond &nbsp;🟡 Leemgrond</li>
+    </ul>
+    <div class="help-note">⚠️ Bebouwde gebieden zijn bewust <em>niet</em> opgenomen — dit is een beperking van de dataset.</div>
   </div>
 
   <!-- METEN -->
@@ -538,8 +530,10 @@
     </div>
     <ul>
       <li>Elk <strong>tussenpunt</strong> toont de afstand van dat segment</li>
-      <li>Het <strong>blauwe startpunt</strong> en rode meetpunten blijven zichtbaar tot je stopt</li>
+      <li>Het <strong>blauwe startpunt</strong> en rode meetpunten blijven zichtbaar na het afronden</li>
       <li><strong>Dubbelklik</strong> om de meting af te ronden — resultaat blijft op de kaart</li>
+      <li>Na afronden: <strong>sleep een punt</strong> om het te verplaatsen</li>
+      <li><strong>Klik op een punt of lijn</strong> → oranje selectie → druk <span class="help-kbd">Delete</span> of <span class="help-kbd">Backspace</span> om de meting te verwijderen</li>
       <li>Klik nogmaals op <strong>📏</strong> of druk <span class="help-kbd">Esc</span> om de meting te wissen</li>
     </ul>
     <div class="help-note">De meetlijn interfereert niet met luifels of pergola's — je kunt gewoon doortekenen na het meten.</div>
@@ -553,7 +547,7 @@
       <li><span class="help-kbd">P</span> — Start pergola tekenen</li>
       <li><span class="help-kbd">M</span> — Start/stop meten</li>
       <li><span class="help-kbd">Ctrl+D</span> — Kopieer geselecteerde luifel of pergola</li>
-      <li><span class="help-kbd">Delete</span> / <span class="help-kbd">Backspace</span> — Verwijder geselecteerde luifel of pergola</li>
+      <li><span class="help-kbd">Delete</span> / <span class="help-kbd">Backspace</span> — Verwijder geselecteerde meting, luifel of pergola</li>
       <li><span class="help-kbd">Esc</span> — Annuleer actieve tekenmodus, meetmodus of verwijdermodus</li>
     </ul>
   </div>
@@ -624,22 +618,12 @@
     { layers: "soilarea", format: "image/png", transparent: true, maxZoom: 22, opacity: 0.6 }
   );
 
-  map.createPane('bhrgtPane');
-  map.getPane('bhrgtPane').style.zIndex = '410';
-  map.getPane('bhrgtPane').style.filter = 'brightness(1.4) saturate(2)';
-
-  const broBhrgt = L.tileLayer.wms(
-    "https://service.pdok.nl/tno/bro-geotechnisch-booronderzoek/wms/v1_0",
-    { layers: "bhrgt_kenset", format: "image/png", transparent: true, maxZoom: 22, pane: 'bhrgtPane' }
-  );
-
   L.control.layers(
     { "PDOK Luchtfoto": pdokLuchtfoto, "OpenStreetMap": osm },
     {
       "Perceelgrenzen (Kadaster)": pdokPercelen,
       "Hoogtekaart (AHN4)": ahn4,
-      "Bodemkaart (BRO)": broBodemkaart,
-      "Grondboringen (BRO BHR-GT)": broBhrgt
+      "Bodemkaart (BRO)": broBodemkaart
     },
     { collapsed: true }
   ).addTo(map);
@@ -683,7 +667,6 @@
   map.on("overlayadd", (e) => {
     if (e.name === "Hoogtekaart (AHN4)")      { ahnLayerActive = true; document.getElementById("ahnLegend").style.display = ""; }
     if (e.name === "Bodemkaart (BRO)")        { bodemkaartActive = true; }
-    if (e.name === "Grondboringen (BRO BHR-GT)") { bhrgtActive = true; }
   });
   map.on("overlayremove", (e) => {
     if (e.name === "Hoogtekaart (AHN4)") {
@@ -693,7 +676,6 @@
       document.getElementById("ahnLegend").style.display = "none";
     }
     if (e.name === "Bodemkaart (BRO)")        { bodemkaartActive = false; }
-    if (e.name === "Grondboringen (BRO BHR-GT)") { bhrgtActive = false; }
   });
 
   // Remove middle edit markers globally (carports)
@@ -744,10 +726,11 @@
   let ahnMarker2 = null;
 
   let bodemkaartActive = false;
-  let bhrgtActive = false;
 
   let measureMode = false;
   let measurePoints = [];
+  let measureDotMarkers = [];
+  let measureSelected = false;
   let _measureLastClickTime = 0;
   let _measureLastClickLL   = null;
 
@@ -2224,11 +2207,12 @@
     updateTotals();
     updateSideButtons();
 
+    if (measureSelected) deselectMeasurement();
+
     if (mode !== "delete") {
       const suggOpen = document.getElementById('uiSuggestions').style.display !== 'none';
       ahnClick(e.latlng);
       if (bodemkaartActive && !suggOpen) bodemkaartClick(e.latlng);
-      if (bhrgtActive && !suggOpen) bhrgtClick(e.latlng);
     }
   });
 
@@ -2329,6 +2313,16 @@
   /* ===================== BODEMKAART CLICK ===================== */
   const BODEM_WMS = "https://service.pdok.nl/bzk/bro-bodemkaart/wms/v1_0";
 
+  function soilCategory(code, name) {
+    const first = ((code || '').match(/[A-Z]/) || [''])[0];
+    const n = (name || '').toLowerCase();
+    if (first === 'V' || n.includes('veen')) return { dot: '🔴', label: 'Veengrond' };
+    if (first === 'M' || first === 'R' || first === 'K' || n.includes('klei')) return { dot: '🟠', label: 'Kleigrond' };
+    if (first === 'Z' || first === 'H' || first === 'D' || n.includes('zand')) return { dot: '🟢', label: 'Zandgrond' };
+    if (first === 'L' || n.includes('leem')) return { dot: '🟡', label: 'Leemgrond' };
+    return { dot: '⚫', label: 'Onbekend' };
+  }
+
   async function bodemkaartClick(latlng){
     try {
       const d = 0.0015;
@@ -2344,11 +2338,12 @@
       const p = feat.properties;
       const name = p.first_soilname || p.normal_soilprofile_name || "—";
       const code = p.soilcode || p.first_soilcode || "—";
+      const cat = soilCategory(code, name);
       L.popup({ closeButton: true, offset: [0, -4], maxWidth: 320, autoPan: false })
         .setLatLng(latlng)
         .setContent(`
           <div style="font-size:13px; line-height:1.75; min-width:200px;">
-            <div style="font-weight:800; margin-bottom:6px;">🌱 Bodemtype</div>
+            <div style="font-weight:800; margin-bottom:6px;">${cat.dot} ${cat.label}</div>
             <div style="display:flex; justify-content:space-between; gap:12px; margin-bottom:4px;">
               <span style="color:#555; flex-shrink:0;">Code</span><b>${code}</b>
             </div>
@@ -2358,51 +2353,6 @@
     } catch(err) { console.warn("Bodemkaart query mislukt:", err); }
   }
 
-  /* ===================== BHR-GT CLICK ===================== */
-  const BHRGT_WMS = "https://service.pdok.nl/tno/bro-geotechnisch-booronderzoek/wms/v1_0";
-
-  async function bhrgtClick(latlng){
-    try {
-      const d = 0.003;
-      const url = `${BHRGT_WMS}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo` +
-        `&LAYERS=bhrgt_kenset&QUERY_LAYERS=bhrgt_kenset&CRS=EPSG:4326` +
-        `&BBOX=${latlng.lat-d},${latlng.lng-d},${latlng.lat+d},${latlng.lng+d}` +
-        `&WIDTH=21&HEIGHT=21&I=10&J=10&INFO_FORMAT=application/json&FEATURE_COUNT=1`;
-      const res = await fetch(url);
-      if (!res.ok) return;
-      const json = await res.json();
-      const feat = json.features && json.features[0];
-      if (!feat) return;
-      const p = feat.properties;
-
-      const broId  = p.bro_id || "—";
-      const diepte = p.einddiepte_boren != null ? `${parseFloat(p.einddiepte_boren).toFixed(1)} m` : "—";
-      const datum  = (p.startdatum_boring || p.rapportagedatum_onderzoek || "—").split("T")[0];
-      const nap    = p.verschuiving != null ? `${parseFloat(p.verschuiving) >= 0 ? "+" : ""}${parseFloat(p.verschuiving).toFixed(2)} m NAP` : "—";
-      const kwal   = p.kwaliteitsregime || "";
-
-      let rows = `
-        <div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:#555;">BRO-ID</span><b style="font-family:monospace;font-size:11px">${broId}</b></div>
-        <div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:#555;">Boordiepte</span><b>${diepte}</b></div>
-        <div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:#555;">Datum</span><b>${datum}</b></div>
-        <div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:#555;">Maaiveld</span><b>${nap}</b></div>`;
-      if (kwal) rows += `<div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:#555;">Kwaliteit</span><b>${kwal}</b></div>`;
-
-      L.popup({ closeButton: true, offset: [0, -4], maxWidth: 300, autoPan: false })
-        .setLatLng(latlng)
-        .setContent(`
-          <div style="font-size:13px; line-height:1.85; min-width:210px;">
-            <div style="font-weight:800; margin-bottom:6px;">🔩 Grondboringen (BHR-GT)</div>
-            ${rows}
-            <div style="margin-top:8px; padding-top:6px; border-top:1px solid #eee; font-size:11px; color:#888;">
-              Zoek <b>${broId}</b> op
-              <a href="https://www.dinoloket.nl/booronderzoek" target="_blank" rel="noopener" style="color:#1f4f99;">DINOloket →</a>
-            </div>
-          </div>`)
-        .openOn(map);
-    } catch(err) { console.warn("BHR-GT query mislukt:", err); }
-  }
-
   /* ===================== MEASURE ===================== */
   function formatDist(meters){
     if (meters >= 1000) return (meters / 1000).toFixed(2) + ' km';
@@ -2410,53 +2360,75 @@
     return meters.toFixed(1) + ' m';
   }
 
-  function measureRedraw(){
+  function measureMakeDotIcon(idx, selected) {
+    const first = idx === 0;
+    const bg = selected ? '#ff8800' : (first ? '#1f4f99' : '#e63939');
+    const sz = first ? 11 : 9;
+    return L.divIcon({ className: '', iconSize: [sz, sz], iconAnchor: [Math.floor(sz/2), Math.floor(sz/2)],
+      html: `<div style="width:${sz}px;height:${sz}px;background:${bg};border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.35);cursor:${measureMode?'crosshair':'grab'};"></div>` });
+  }
+
+  function measureRebuildLines(){
     measureLayer.clearLayers();
     const pts = measurePoints;
-    if (pts.length === 0) return;
-
-    for (let i = 0; i < pts.length; i++){
-      const first = i === 0;
-      const dotHtml = `<div style="
-        width:${first ? 11 : 9}px; height:${first ? 11 : 9}px;
-        background:${first ? '#1f4f99' : '#e63939'};
-        border:2px solid #fff; border-radius:50%;
-        box-shadow:0 2px 6px rgba(0,0,0,.35);
-      "></div>`;
-      L.marker(pts[i], { interactive:false, icon: L.divIcon({ className:'', html:dotHtml, iconSize:[11,11], iconAnchor:[5,5] }) })
-        .addTo(measureLayer);
-    }
-
+    if (pts.length < 2) return;
+    const color = measureSelected ? '#ff8800' : '#e63939';
+    const weight = measureSelected ? 3 : 2;
     let total = 0;
     for (let i = 1; i < pts.length; i++){
       const d = distanceM(pts[i-1], pts[i]);
       total += d;
-      L.polyline([pts[i-1], pts[i]], { color:'#e63939', weight:2, opacity:.85, dashArray:'7,5' }).addTo(measureLayer);
-
+      const line = L.polyline([pts[i-1], pts[i]], { color, weight, opacity: .85, dashArray: '7,5', interactive: !measureMode });
+      if (!measureMode){
+        line.on('click', (ev) => { L.DomEvent.stopPropagation(ev); selectMeasurement(); });
+      }
+      line.addTo(measureLayer);
       const mid = L.latLng((pts[i-1].lat + pts[i].lat)/2, (pts[i-1].lng + pts[i].lng)/2);
-      const segHtml = `<div style="
-        background:rgba(0,0,0,.72); color:#fff; font-size:11px; font-weight:600;
-        padding:2px 7px; border-radius:6px; white-space:nowrap; pointer-events:none;
-      ">${formatDist(d)}</div>`;
-      L.marker(mid, { interactive:false, icon: L.divIcon({ className:'', html:segHtml, iconSize:[null,null], iconAnchor:[-4,8] }) })
-        .addTo(measureLayer);
+      const segHtml = `<div style="background:rgba(0,0,0,.72);color:#fff;font-size:11px;font-weight:600;padding:2px 7px;border-radius:6px;white-space:nowrap;pointer-events:none;">${formatDist(d)}</div>`;
+      L.marker(mid, { interactive: false, icon: L.divIcon({ className: '', html: segHtml, iconSize: [null,null], iconAnchor: [-4,8] }) }).addTo(measureLayer);
     }
+    const totalBg = measureSelected ? '#ff8800' : '#1f4f99';
+    const totalHtml = `<div style="background:${totalBg};color:#fff;font-size:12px;font-weight:800;padding:4px 10px;border-radius:8px;white-space:nowrap;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.3);">Totaal: ${formatDist(total)}</div>`;
+    L.marker(pts[pts.length-1], { interactive: false, icon: L.divIcon({ className: '', html: totalHtml, iconSize: [null,null], iconAnchor: [-4,-2] }) }).addTo(measureLayer);
+  }
 
-    if (pts.length >= 2){
-      const totalHtml = `<div style="
-        background:#1f4f99; color:#fff; font-size:12px; font-weight:800;
-        padding:4px 10px; border-radius:8px; white-space:nowrap; pointer-events:none;
-        box-shadow:0 2px 8px rgba(0,0,0,.3);
-      ">Totaal: ${formatDist(total)}</div>`;
-      L.marker(pts[pts.length-1], { interactive:false, icon: L.divIcon({ className:'', html:totalHtml, iconSize:[null,null], iconAnchor:[-4,-2] }) })
-        .addTo(measureLayer);
+  function measureRedraw(){
+    for (const m of measureDotMarkers) map.removeLayer(m);
+    measureDotMarkers = [];
+    for (let i = 0; i < measurePoints.length; i++){
+      const idx = i;
+      const m = L.marker(measurePoints[idx], { interactive: true, draggable: false, icon: measureMakeDotIcon(idx, false) });
+      m._measureIdx = idx;
+      m.on('click', (ev) => { L.DomEvent.stopPropagation(ev); selectMeasurement(); });
+      m.on('drag', () => { measurePoints[idx] = m.getLatLng(); measureRebuildLines(); });
+      m.on('dragend', () => { measurePoints[idx] = m.getLatLng(); measureRebuildLines(); });
+      m.addTo(map);
+      measureDotMarkers.push(m);
     }
+    measureRebuildLines();
+  }
+
+  function selectMeasurement(){
+    if (measureMode) return;
+    measureSelected = true;
+    measureRebuildLines();
+    for (const m of measureDotMarkers) m.setIcon(measureMakeDotIcon(m._measureIdx, true));
+  }
+
+  function deselectMeasurement(){
+    if (!measureSelected) return;
+    measureSelected = false;
+    measureRebuildLines();
+    for (const m of measureDotMarkers) m.setIcon(measureMakeDotIcon(m._measureIdx, false));
   }
 
   function startMeasure(){
     stopPergolaDraw();
     if (activeCarportDraw){ try { activeCarportDraw.disable(); } catch {} activeCarportDraw = null; }
     setMode("select");
+    for (const m of measureDotMarkers) map.removeLayer(m);
+    measureDotMarkers = [];
+    measureSelected = false;
     measureMode = true;
     measurePoints = [];
     measureLayer.clearLayers();
@@ -2469,9 +2441,22 @@
   function stopMeasure(keepResult){
     measureMode = false;
     _measureLastClickTime = 0; _measureLastClickLL = null;
-    if (!keepResult){ measurePoints = []; measureLayer.clearLayers(); }
     if (measurePreviewLine){ map.removeLayer(measurePreviewLine); measurePreviewLine = null; }
-    map.doubleClickZoom.enable();
+    if (!keepResult){
+      measurePoints = [];
+      measureLayer.clearLayers();
+      for (const m of measureDotMarkers) map.removeLayer(m);
+      measureDotMarkers = [];
+      measureSelected = false;
+    } else {
+      for (let i = 0; i < measureDotMarkers.length; i++){
+        const m = measureDotMarkers[i];
+        m.dragging.enable();
+        m.setIcon(measureMakeDotIcon(m._measureIdx, false));
+      }
+      measureRebuildLines();
+    }
+    setTimeout(() => { map.doubleClickZoom.enable(); }, 300);
     map.getContainer().style.cursor = '';
     if (UI.measureBtn) UI.measureBtn.classList.remove('active');
   }
@@ -2539,6 +2524,7 @@
     if (e.key === "Delete" || e.key === "Backspace") {
       const t = document.activeElement;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+      if (measureSelected) { stopMeasure(false); return; }
       if (selectedCarportId) { carportDelete(selectedCarportId); return; }
       if (selectedPergolaId) { pergolaDelete(selectedPergolaId); return; }
     }
