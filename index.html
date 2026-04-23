@@ -664,14 +664,11 @@
   const AddressControl = L.Control.extend({
     options: { position: "topleft" },
     onAdd: function(){
-      const div = L.DomUtil.create("div", "ui-card");
+      const div = L.DomUtil.create("div", "autocomplete-wrap");
       div.style.width = "320px";
       div.innerHTML = `
-        <div class="ui-title">Zoek adres</div>
-        <div class="autocomplete-wrap">
-          <input id="uiAddress" class="input" placeholder="Typ een adres (PDOK)..." autocomplete="off"/>
-          <div id="uiSuggestions" class="suggestions"></div>
-        </div>
+        <input id="uiAddress" class="input" placeholder="Typ een adres (PDOK)..." autocomplete="off" style="box-shadow:0 4px 12px rgba(0,0,0,0.15);"/>
+        <div id="uiSuggestions" class="suggestions"></div>
       `;
       L.DomEvent.disableClickPropagation(div);
       L.DomEvent.disableScrollPropagation(div);
