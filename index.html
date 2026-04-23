@@ -2015,7 +2015,7 @@
     pergolaDraw.snappedC = constrainedLatLng;
 
     if (!pergolaDraw.mC){
-      pergolaDraw.mC = L.marker(constrainedLatLng, { interactive:false, icon: makeDrawHandleIcon(3) })
+      pergolaDraw.mC = L.marker(constrainedLatLng, { interactive:false, icon: makeDrawHandleIcon('C') })
         .addTo(pergolaDrawMarkerLayer);
     } else {
       pergolaDraw.mC.setLatLng(constrainedLatLng);
@@ -2051,7 +2051,7 @@
         pergolaDraw.step = 1;
 
         clearPergolaDrawMarkers();
-        pergolaDraw.mA = L.marker(pergolaDraw.A, { interactive:false, icon: makeDrawHandleIcon(1) })
+        pergolaDraw.mA = L.marker(pergolaDraw.A, { interactive:false, icon: makeDrawHandleIcon('A') })
           .addTo(pergolaDrawMarkerLayer);
 
         if (!previewLine) previewLine = L.polyline([pergolaDraw.A, pergolaDraw.A], STYLE_PREVIEW_LINE).addTo(pergolaPreviewLayer);
@@ -2065,7 +2065,7 @@
         pergolaDraw.B = e.latlng;
         pergolaDraw.step = 2;
 
-        pergolaDraw.mB = L.marker(pergolaDraw.B, { interactive:false, icon: makeDrawHandleIcon(2) })
+        pergolaDraw.mB = L.marker(pergolaDraw.B, { interactive:false, icon: makeDrawHandleIcon('B') })
           .addTo(pergolaDrawMarkerLayer);
 
         if (!previewLine) previewLine = L.polyline([pergolaDraw.A, pergolaDraw.B], STYLE_PREVIEW_LINE).addTo(pergolaPreviewLayer);
