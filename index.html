@@ -446,8 +446,8 @@
     <p>Klik op een pergola om te selecteren. De edit-handles verschijnen:</p>
     <ul>
       <li><strong>✥</strong> op hoek A — sleep om de <em>hele pergola</em> te verplaatsen</li>
-      <li><strong>Handle 2</strong> op hoek B — sleep om breedte en richting te wijzigen</li>
-      <li><strong>Handle 3</strong> op punt C — sleep om de diepte aan te passen (loodrecht op AB)</li>
+      <li><strong>Handle B</strong> op hoek B — sleep om breedte en richting te wijzigen</li>
+      <li><strong>Handle C</strong> op punt C — sleep om de diepte aan te passen (loodrecht op AB)</li>
       <li><strong>Breedte / Lengte</strong> invoervelden — direct een waarde invullen en Enter drukken</li>
     </ul>
     <div class="help-note">Buiten de pergola verschijnen tent-pictogrammen die de dwarsdoorsnede van de paneelopstelling tonen — 2 panelen van 22° met de punten naar elkaar toe.</div>
@@ -487,8 +487,10 @@
   <div class="help-sec">
     <h3>⌨️ Toetsenbord sneltoetsen</h3>
     <ul>
+      <li><span class="help-kbd">L</span> — Start luifel tekenen</li>
+      <li><span class="help-kbd">P</span> — Start pergola tekenen</li>
       <li><span class="help-kbd">Ctrl+D</span> — Kopieer geselecteerde luifel of pergola</li>
-      <li><span class="help-kbd">Delete</span> — Verwijder geselecteerde luifel of pergola</li>
+      <li><span class="help-kbd">Delete</span> / <span class="help-kbd">Backspace</span> — Verwijder geselecteerde luifel of pergola</li>
       <li><span class="help-kbd">Esc</span> — Annuleer actieve tekenmodus of verwijdermodus</li>
     </ul>
   </div>
@@ -1815,11 +1817,11 @@
 
     const mA = L.marker(A, { draggable: true, icon: L.divIcon({
       className: '',
-      html: '<div style="width:30px;height:30px;background:rgba(255,255,255,0.96);border:2px solid #888;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;cursor:grab;box-shadow:0 2px 6px rgba(0,0,0,0.2);user-select:none;">✥</div>',
+      html: '<div style="position:relative;width:30px;height:30px;"><div style="width:30px;height:30px;background:rgba(255,255,255,0.96);border:2px solid #888;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;cursor:grab;box-shadow:0 2px 6px rgba(0,0,0,0.2);user-select:none;">✥</div><div style="position:absolute;top:-20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.82);color:#fff;font-size:11px;font-weight:900;line-height:1;padding:3px 6px;border-radius:10px;white-space:nowrap;">A</div></div>',
       iconSize: [30, 30], iconAnchor: [15, 15]
     })});
-    const mB = L.marker(B, { draggable: true, icon: makeDrawHandleIcon(2) });
-    const mC = L.marker(C, { draggable: false, icon: makeDrawHandleIcon(3) }); // custom drag
+    const mB = L.marker(B, { draggable: true, icon: makeDrawHandleIcon('B') });
+    const mC = L.marker(C, { draggable: false, icon: makeDrawHandleIcon('C') }); // custom drag
 
     stopEventOnMarker(mA); stopEventOnMarker(mB); stopEventOnMarker(mC);
     stopMapDragDuringMarkerDrag(mA);
@@ -2251,12 +2253,16 @@
       else if (selectedPergolaId) pergolaCopySelected();
       return;
     }
-    if (e.key === "Delete") {
+    if (e.key === "Delete" || e.key === "Backspace") {
       const t = document.activeElement;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
       if (selectedCarportId) { carportDelete(selectedCarportId); return; }
       if (selectedPergolaId) { pergolaDelete(selectedPergolaId); return; }
     }
+    const t2 = document.activeElement;
+    if (t2 && (t2.tagName === "INPUT" || t2.tagName === "TEXTAREA")) return;
+    if (e.key === "l" || e.key === "L") { e.preventDefault(); UI.drawBtn.onclick(); }
+    if (e.key === "p" || e.key === "P") { e.preventDefault(); UI.drawPergolaBtn.onclick(); }
   });
 
   /* ===================== CLEAR ===================== */
