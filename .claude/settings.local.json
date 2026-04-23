@@ -20,7 +20,8 @@
       "WebFetch(domain:mijn.pdok.nl)",
       "WebFetch(domain:www.dinoloket.nl)",
       "WebFetch(domain:dinoservices.nl)",
-      "WebFetch(domain:www.nationaalgeoregister.nl)"
+      "WebFetch(domain:www.nationaalgeoregister.nl)",
+      "WebFetch(domain:geodata.nationaalgeoregister.nl)"
     ]
   }
 }

@@ -485,10 +485,20 @@
 
   <!-- ONDERGROND -->
   <div class="help-sec">
-    <h3>🌱 Bodemkaart (BRO)</h3>
-    <p>Activeer <strong>Bodemkaart (BRO)</strong> via het lagen-icoontje rechtsboven. De kaart toont de officiële bodemtypen van Nederland (BRO/WUR, schaal 1:50.000).</p>
-    <p><strong>Klik op de kaart</strong> om het bodemtype op te vragen: je ziet de bodemcode (bijv. <em>Rn47C</em>) en de volledige naam (bijv. <em>Kalkloze poldervaaggronden; zware klei</em>).</p>
-    <div class="help-note">⚠️ Bebouwde gebieden (steden, dorpen) zijn bewust <em>niet</em> opgenomen in de Bodemkaart — dit is een beperking van de originele dataset.</div>
+    <h3>🌱 Ondergrond (BRO)</h3>
+    <p>Activeer via het lagen-icoontje rechtsboven. Klik op de kaart voor info bij elk actief lagen.</p>
+    <div class="help-row" style="gap:10px;">
+      <div style="flex:1;min-width:160px;">
+        <p><strong>Bodemkaart (BRO)</strong><br>
+        Toont bodemtypen van Nederland (BRO/WUR, 1:50.000). <strong>Klik op de kaart</strong> → popup met bodemcode en volledige naam (bijv. <em>Kalkloze poldervaaggronden; zware klei</em>).</p>
+        <div class="help-note">⚠️ Bebouwde gebieden zijn bewust <em>niet</em> opgenomen — dit is een beperking van de dataset.</div>
+      </div>
+      <div style="flex:1;min-width:160px;">
+        <p><strong>Grondboringen (BRO BHR-GT)</strong><br>
+        Toont locaties van geotechnische boringen uit de Basisregistratie Ondergrond. <strong>Klik op een punt</strong> → popup met BRO-ID, boordiepte, datum en maaiveldhoogte (NAP). Zoek het BRO-ID op in DINOloket voor het volledige boorprofiel.</p>
+        <div class="help-note">💡 Zoom in voor meer detail — bij lage zoom worden punten samengevat.</div>
+      </div>
+    </div>
   </div>
 
   <!-- METEN -->
@@ -614,12 +624,22 @@
     { layers: "soilarea", format: "image/png", transparent: true, maxZoom: 22, opacity: 0.6 }
   );
 
+  map.createPane('bhrgtPane');
+  map.getPane('bhrgtPane').style.zIndex = '410';
+  map.getPane('bhrgtPane').style.filter = 'brightness(1.4) saturate(2)';
+
+  const broBhrgt = L.tileLayer.wms(
+    "https://service.pdok.nl/tno/bro-geotechnisch-booronderzoek/wms/v1_0",
+    { layers: "bhrgt_kenset", format: "image/png", transparent: true, maxZoom: 22, pane: 'bhrgtPane' }
+  );
+
   L.control.layers(
     { "PDOK Luchtfoto": pdokLuchtfoto, "OpenStreetMap": osm },
     {
       "Perceelgrenzen (Kadaster)": pdokPercelen,
       "Hoogtekaart (AHN4)": ahn4,
-      "Bodemkaart (BRO)": broBodemkaart
+      "Bodemkaart (BRO)": broBodemkaart,
+      "Grondboringen (BRO BHR-GT)": broBhrgt
     },
     { collapsed: true }
   ).addTo(map);
@@ -661,8 +681,9 @@
   map.addControl(new AhnLegend());
 
   map.on("overlayadd", (e) => {
-    if (e.name === "Hoogtekaart (AHN4)") { ahnLayerActive = true; document.getElementById("ahnLegend").style.display = ""; }
-    if (e.name === "Bodemkaart (BRO)")   { bodemkaartActive = true; }
+    if (e.name === "Hoogtekaart (AHN4)")      { ahnLayerActive = true; document.getElementById("ahnLegend").style.display = ""; }
+    if (e.name === "Bodemkaart (BRO)")        { bodemkaartActive = true; }
+    if (e.name === "Grondboringen (BRO BHR-GT)") { bhrgtActive = true; }
   });
   map.on("overlayremove", (e) => {
     if (e.name === "Hoogtekaart (AHN4)") {
@@ -671,7 +692,8 @@
       if (ahnMarker2) { map.removeLayer(ahnMarker2); ahnMarker2 = null; }
       document.getElementById("ahnLegend").style.display = "none";
     }
-    if (e.name === "Bodemkaart (BRO)") { bodemkaartActive = false; }
+    if (e.name === "Bodemkaart (BRO)")        { bodemkaartActive = false; }
+    if (e.name === "Grondboringen (BRO BHR-GT)") { bhrgtActive = false; }
   });
 
   // Remove middle edit markers globally (carports)
@@ -722,6 +744,7 @@
   let ahnMarker2 = null;
 
   let bodemkaartActive = false;
+  let bhrgtActive = false;
 
   let measureMode = false;
   let measurePoints = [];
@@ -2205,6 +2228,7 @@
       const suggOpen = document.getElementById('uiSuggestions').style.display !== 'none';
       ahnClick(e.latlng);
       if (bodemkaartActive && !suggOpen) bodemkaartClick(e.latlng);
+      if (bhrgtActive && !suggOpen) bhrgtClick(e.latlng);
     }
   });
 
@@ -2332,6 +2356,51 @@
           </div>`)
         .openOn(map);
     } catch(err) { console.warn("Bodemkaart query mislukt:", err); }
+  }
+
+  /* ===================== BHR-GT CLICK ===================== */
+  const BHRGT_WMS = "https://service.pdok.nl/tno/bro-geotechnisch-booronderzoek/wms/v1_0";
+
+  async function bhrgtClick(latlng){
+    try {
+      const d = 0.003;
+      const url = `${BHRGT_WMS}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo` +
+        `&LAYERS=bhrgt_kenset&QUERY_LAYERS=bhrgt_kenset&CRS=EPSG:4326` +
+        `&BBOX=${latlng.lat-d},${latlng.lng-d},${latlng.lat+d},${latlng.lng+d}` +
+        `&WIDTH=21&HEIGHT=21&I=10&J=10&INFO_FORMAT=application/json&FEATURE_COUNT=1`;
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const json = await res.json();
+      const feat = json.features && json.features[0];
+      if (!feat) return;
+      const p = feat.properties;
+
+      const broId  = p.bro_id || "—";
+      const diepte = p.einddiepte_boren != null ? `${parseFloat(p.einddiepte_boren).toFixed(1)} m` : "—";
+      const datum  = (p.startdatum_boring || p.rapportagedatum_onderzoek || "—").split("T")[0];
+      const nap    = p.verschuiving != null ? `${parseFloat(p.verschuiving) >= 0 ? "+" : ""}${parseFloat(p.verschuiving).toFixed(2)} m NAP` : "—";
+      const kwal   = p.kwaliteitsregime || "";
+
+      let rows = `
+        <div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:#555;">BRO-ID</span><b style="font-family:monospace;font-size:11px">${broId}</b></div>
+        <div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:#555;">Boordiepte</span><b>${diepte}</b></div>
+        <div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:#555;">Datum</span><b>${datum}</b></div>
+        <div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:#555;">Maaiveld</span><b>${nap}</b></div>`;
+      if (kwal) rows += `<div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:#555;">Kwaliteit</span><b>${kwal}</b></div>`;
+
+      L.popup({ closeButton: true, offset: [0, -4], maxWidth: 300, autoPan: false })
+        .setLatLng(latlng)
+        .setContent(`
+          <div style="font-size:13px; line-height:1.85; min-width:210px;">
+            <div style="font-weight:800; margin-bottom:6px;">🔩 Grondboringen (BHR-GT)</div>
+            ${rows}
+            <div style="margin-top:8px; padding-top:6px; border-top:1px solid #eee; font-size:11px; color:#888;">
+              Zoek <b>${broId}</b> op
+              <a href="https://www.dinoloket.nl/booronderzoek" target="_blank" rel="noopener" style="color:#1f4f99;">DINOloket →</a>
+            </div>
+          </div>`)
+        .openOn(map);
+    } catch(err) { console.warn("BHR-GT query mislukt:", err); }
   }
 
   /* ===================== MEASURE ===================== */
