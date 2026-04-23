@@ -490,25 +490,21 @@
     <div class="help-row" style="gap:10px;">
       <div style="flex:1;min-width:160px;">
         <p><strong>Bodemkaart (BRO)</strong><br>
-        Toont de bodemtypen van heel Nederland (BRO/WUR, 1:50.000). Kleurvlakken per bodemtype.
-        <br><strong>Klik op de kaart</strong> → popup met bodemtypenaam, code en funderingsadvies:</p>
+        Toont de bodemtypen van Nederland (BRO/WUR, 1:50.000). Kleurvlakken per bodemtype.
+        <br><strong>Klik op de kaart</strong> → popup met bodemtypenaam en funderingsadvies:</p>
         <ul>
-          <li>🔴 Veengrond — heien vrijwel zeker noodzakelijk</li>
-          <li>🟠 Kleigrond — heien waarschijnlijk noodzakelijk</li>
-          <li>🟢 Zandgrond — funderingsplaat of korte palen mogelijk</li>
-          <li>🟡 Leem/löss — nader onderzoek aanbevolen</li>
+          <li>🔴 Veengrond — heien noodzakelijk</li>
+          <li>🟠 Kleigrond — heien waarschijnlijk</li>
+          <li>🟢 Zandgrond — funderingsplaat mogelijk</li>
+          <li>🟡 Leem/löss — nader onderzoek</li>
         </ul>
+        <div class="help-note" style="margin-top:6px;">⚠️ Bebouwde gebieden (steden, dorpen) zijn bewust <em>niet</em> opgenomen in de Bodemkaart — dit is een beperking van de dataset.</div>
       </div>
       <div style="flex:1;min-width:160px;">
         <p><strong>Sonderingen (BRO CPT)</strong><br>
-        Toont de locaties van uitgevoerde sonderingen (Cone Penetration Tests) uit de Basisregistratie Ondergrond.
-        <br><strong>Klik op een stip</strong> → popup met:</p>
-        <ul>
-          <li>BRO-ID van de sondering</li>
-          <li>Sondeerdiepte (= indicatie draaglaag)</li>
-          <li>Uitvoeringsdatum</li>
-          <li>Link naar het volledige profiel op DINOloket</li>
-        </ul>
+        Toont sonderingspunten (Cone Penetration Tests) uit de Basisregistratie Ondergrond, dagelijks bijgewerkt.
+        <br><strong>Klik op een punt</strong> → popup met BRO-ID, sondeerdiepte en datum. Zoek het BRO-ID op in DINOloket voor het volledige profiel.</p>
+        <div class="help-note" style="margin-top:4px;">💡 Zoom in (zoom 14+) om alle sonderingen te zien — bij lage zoom worden punten samengevat.</div>
       </div>
     </div>
     <div class="help-note">Beide lagen zijn afkomstig van de Basisregistratie Ondergrond (BRO) en zijn gratis beschikbaar. De sonderingenkaart is dagelijks bijgewerkt.</div>
@@ -637,9 +633,13 @@
     { layers: "soilarea", format: "image/png", transparent: true, maxZoom: 22, opacity: 0.6 }
   );
 
+  map.createPane('cptPane');
+  map.getPane('cptPane').style.zIndex = '410';
+  map.getPane('cptPane').style.filter = 'brightness(2.5) saturate(8)';
+
   const broCpt = L.tileLayer.wms(
     "https://service.pdok.nl/bzk/brocptkenset/wms/v1_0",
-    { layers: "cpt_kenset", format: "image/png", transparent: true, maxZoom: 22 }
+    { layers: "cpt_kenset", format: "image/png", transparent: true, maxZoom: 22, pane: 'cptPane' }
   );
 
   L.control.layers(
@@ -697,10 +697,18 @@
       div.id = "bodemLegend";
       div.style.cssText = "display:none; padding:8px 10px; max-width:220px;";
       div.innerHTML = `
-        <div class="ui-title" style="margin-bottom:6px;">Bodemkaart (BRO) — klik voor info</div>
-        <img src="https://service.pdok.nl/bzk/bro-bodemkaart/wms/v1_0?SERVICE=WMS&REQUEST=GetLegendGraphic&VERSION=1.3.0&LAYER=soilarea&FORMAT=image/png&TRANSPARENT=true"
-             style="max-width:200px; display:block;" alt="Legenda bodemkaart"/>
-        <div class="ui-small" style="margin-top:4px; color:#888;">Klik op de kaart voor bodemtype + funderingsadvies</div>
+        <div class="ui-title" style="margin-bottom:5px;">Bodemkaart (BRO)</div>
+        <div class="ui-small" style="color:#b06000; margin-bottom:6px; line-height:1.4;">
+          ⚠️ Bebouwde gebieden zijn <em>niet</em> gekarteerd — klik buiten steden/dorpen.
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px; font-size:12px; color:#333; line-height:1.35;">
+          <div>🔴 Veengrond — heien noodzakelijk</div>
+          <div>🟠 Kleigrond — heien waarschijnlijk</div>
+          <div>🟢 Zandgrond — funderingsplaat mogelijk</div>
+          <div>🟡 Leem/löss — nader onderzoek</div>
+          <div>⚪ Overig — sondering aanbevolen</div>
+        </div>
+        <div class="ui-small" style="margin-top:6px; color:#888;">Klik op de kaart voor bodemtype &amp; advies</div>
       `;
       L.DomEvent.disableClickPropagation(div);
       L.DomEvent.disableScrollPropagation(div);
@@ -2272,9 +2280,10 @@
     updateSideButtons();
 
     if (mode !== "delete") {
+      const suggOpen = document.getElementById('uiSuggestions').style.display !== 'none';
       ahnClick(e.latlng);
-      if (bodemkaartActive) bodemkaartClick(e.latlng);
-      if (cptActive) cptClick(e.latlng);
+      if (bodemkaartActive && !suggOpen) bodemkaartClick(e.latlng);
+      if (cptActive && !suggOpen) cptClick(e.latlng);
     }
   });
 
@@ -2404,7 +2413,7 @@
       const name  = p.first_soilname || p.normal_soilprofile_name || "—";
       const code  = p.soilcode || p.first_soilcode || "—";
       const adv   = soilAdvice(name);
-      L.popup({ closeButton: true, offset: [0, -4], maxWidth: 320 })
+      L.popup({ closeButton: true, offset: [0, -4], maxWidth: 320, autoPan: false })
         .setLatLng(latlng)
         .setContent(`
           <div style="font-size:13px; line-height:1.75; min-width:220px;">
@@ -2427,11 +2436,11 @@
 
   async function cptClick(latlng){
     try {
-      const d = 0.0008;
+      const d = 0.003;
       const url = `${CPT_WMS}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo` +
         `&LAYERS=cpt_kenset&QUERY_LAYERS=cpt_kenset&CRS=EPSG:4326` +
         `&BBOX=${latlng.lat-d},${latlng.lng-d},${latlng.lat+d},${latlng.lng+d}` +
-        `&WIDTH=101&HEIGHT=101&I=50&J=50&INFO_FORMAT=application/json`;
+        `&WIDTH=21&HEIGHT=21&I=10&J=10&INFO_FORMAT=application/json&FEATURE_COUNT=1`;
       const res = await fetch(url);
       if (!res.ok) return;
       const json = await res.json();
@@ -2439,31 +2448,30 @@
       if (!feat) return;
       const p = feat.properties;
 
-      const broId   = p.bro_id || p.broId || p.broid || Object.values(p).find(v => typeof v === "string" && v.match(/^CPT/i)) || "—";
-      const depth   = p.final_depth_of_cpt ?? p.finalDepthOfCpt ?? p.depth ?? null;
-      const date    = p.start_date_of_work || p.startDateOfWork || p.date || "—";
-      const quality = p.quality_regime || p.qualityRegime || "";
+      const broId   = p.bro_id || "—";
+      const depth   = p.einddiepte != null ? `${parseFloat(p.einddiepte).toFixed(1)} m` : "—";
+      const date    = (p.starttijd_meten || "—").split("T")[0];
+      const norm    = p.sondeernorm || "";
+      const kwal    = p.kwaliteitsklasse || "";
 
-      const depthStr = depth != null ? `${parseFloat(depth).toFixed(1)} m` : "—";
-      const dinoUrl  = `https://www.dinoloket.nl/locatie?naam=${encodeURIComponent(broId)}`;
+      const dinoUrl = `https://www.dinoloket.nl/sondeeronderzoek`;
 
       let rows = `
-        <div style="display:flex;justify-content:space-between;gap:12px;"><span style="color:#555;">BRO-ID</span><b>${broId}</b></div>
-        <div style="display:flex;justify-content:space-between;gap:12px;"><span style="color:#555;">Sondeerdiepte</span><b>${depthStr}</b></div>
-        <div style="display:flex;justify-content:space-between;gap:12px;"><span style="color:#555;">Datum</span><b>${date}</b></div>`;
-      if (quality) rows += `<div style="display:flex;justify-content:space-between;gap:12px;"><span style="color:#555;">Kwaliteit</span><b>${quality}</b></div>`;
+        <div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:#555;">BRO-ID</span><b style="font-family:monospace">${broId}</b></div>
+        <div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:#555;">Sondeerdiepte</span><b>${depth}</b></div>
+        <div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:#555;">Datum</span><b>${date}</b></div>`;
+      if (norm) rows += `<div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:#555;">Norm</span><b>${norm}</b></div>`;
+      if (kwal) rows += `<div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:#555;">Kwaliteit</span><b>${kwal}</b></div>`;
 
-      L.popup({ closeButton: true, offset: [0, -4], maxWidth: 300 })
+      L.popup({ closeButton: true, offset: [0, -4], maxWidth: 300, autoPan: false })
         .setLatLng(latlng)
         .setContent(`
-          <div style="font-size:13px; line-height:1.85; min-width:200px;">
+          <div style="font-size:13px; line-height:1.85; min-width:210px;">
             <div style="font-weight:800; margin-bottom:6px;">📊 Sondering (CPT)</div>
             ${rows}
-            <div style="margin-top:8px;">
-              <a href="${dinoUrl}" target="_blank" rel="noopener"
-                 style="color:#1f4f99; font-weight:600; text-decoration:none;">
-                Bekijk profiel op DINOloket →
-              </a>
+            <div style="margin-top:8px; padding-top:6px; border-top:1px solid #eee; font-size:11px; color:#888;">
+              Zoek <b>${broId}</b> op
+              <a href="${dinoUrl}" target="_blank" rel="noopener" style="color:#1f4f99;">DINOloket →</a>
             </div>
           </div>`)
         .openOn(map);
