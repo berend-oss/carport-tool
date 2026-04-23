@@ -706,6 +706,8 @@
 
   let measureMode = false;
   let measurePoints = [];
+  let _measureLastClickTime = 0;
+  let _measureLastClickLL   = null;
 
   const pergolaDraw = { active:false, step:0, A:null, B:null, snappedC:null, mA:null, mB:null, mC:null };
 
@@ -2104,6 +2106,20 @@
     if (mode === "delete") return;
 
     if (measureMode){
+      const now = Date.now();
+      if (_measureLastClickLL){
+        const p1 = map.latLngToContainerPoint(e.latlng);
+        const p2 = map.latLngToContainerPoint(_measureLastClickLL);
+        const px = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+        if (now - _measureLastClickTime < 600 && px < 24){
+          if (measurePreviewLine){ map.removeLayer(measurePreviewLine); measurePreviewLine = null; }
+          _measureLastClickTime = 0; _measureLastClickLL = null;
+          stopMeasure(true);
+          return;
+        }
+      }
+      _measureLastClickTime = now;
+      _measureLastClickLL   = e.latlng;
       measurePoints.push(e.latlng);
       measureRedraw();
       return;
@@ -2328,6 +2344,7 @@
 
   function stopMeasure(keepResult){
     measureMode = false;
+    _measureLastClickTime = 0; _measureLastClickLL = null;
     if (!keepResult){ measurePoints = []; measureLayer.clearLayers(); }
     if (measurePreviewLine){ map.removeLayer(measurePreviewLine); measurePreviewLine = null; }
     map.doubleClickZoom.enable();
@@ -2339,15 +2356,6 @@
     if (measureMode) stopMeasure(false);
     else startMeasure();
   };
-
-  map.on("dblclick", (e) => {
-    if (!measureMode) return;
-    L.DomEvent.stopPropagation(e);
-    if (measurePoints.length > 0) measurePoints.pop();
-    if (measurePreviewLine){ map.removeLayer(measurePreviewLine); measurePreviewLine = null; }
-    measureRedraw();
-    stopMeasure(true);
-  });
 
   /* ===================== COPY ===================== */
   function carportCopySelected(){
