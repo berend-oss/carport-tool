@@ -407,7 +407,7 @@
           <button id="uiExport" class="btn tip-btn" type="button" data-tip="Exporteer ontwerp als JSON-bestand" style="flex:1;font-size:16px;padding:7px 4px;">📤</button>
           <button id="uiImport" class="btn tip-btn" type="button" data-tip="Importeer ontwerp vanuit JSON-bestand" style="flex:1;font-size:16px;padding:7px 4px;">📂</button>
           <button id="uiZoomFit" class="btn tip-btn" type="button" data-tip="Zoom naar alle objecten op de kaart" style="flex:1;font-size:16px;padding:7px 4px;">🎯</button>
-          <button id="uiCopy" class="btn tip-btn" type="button" data-tip="Kopieer de geselecteerde luifel" style="flex:1;font-size:16px;padding:7px 4px;">📋</button>
+          <button id="uiCopy" class="btn tip-btn" type="button" data-tip="Kopieer de geselecteerde luifel of pergola" style="flex:1;font-size:16px;padding:7px 4px;">📋</button>
         </div>
 
         <div id="uiSaveStatus" class="ui-small" style="color:#888;min-height:14px;margin-top:4px;font-size:11px;"></div>
@@ -1868,7 +1868,22 @@
     rebuildAllPanelsAndOverlaps();
   }
 
-  UI.copyBtn.onclick = () => carportCopySelected();
+  function pergolaCopySelected(){
+    if (!selectedPergolaId) return;
+    const pg = pergolas.get(selectedPergolaId);
+    if (!pg) return;
+    const bearing = bearingBetweenLL(pg.A, pg.B);
+    const newA = destinationFromLL(pg.A, 5, bearing + 90);
+    const newB = destinationFromLL(pg.B, 5, bearing + 90);
+    const id = pergolaCreate(newA, newB, pg.lengthSignedM);
+    pergolaSelect(id);
+    rebuildAllPanelsAndOverlaps();
+  }
+
+  UI.copyBtn.onclick = () => {
+    if (selectedCarportId) carportCopySelected();
+    else if (selectedPergolaId) pergolaCopySelected();
+  };
 
   /* ===================== Keyboard ===================== */
   document.addEventListener("keydown", (e) => {
@@ -1879,7 +1894,8 @@
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "d") {
       e.preventDefault();
-      carportCopySelected();
+      if (selectedCarportId) carportCopySelected();
+      else if (selectedPergolaId) pergolaCopySelected();
       return;
     }
     if (e.key === "Delete") {
