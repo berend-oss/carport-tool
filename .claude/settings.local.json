@@ -10,7 +10,14 @@
       "Bash(grep -oP '\"role\":\"user\",\"content\":\"\\\\[{\\\\\"type\\\\\":\\\\\"text\\\\\",\\\\\"text\\\\\":\\\\\"[^\"]{10,300}\"')",
       "Bash(grep -oP '\"type\":\"user\",\"message\":\\\\{\"role\":\"user\",\"content\":\\\\[{\"type\":\"text\",\"text\":\"[^\"]*\"')",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "WebFetch(domain:service.pdok.nl)",
+      "WebFetch(domain:publiek.broservices.nl)",
+      "WebSearch",
+      "WebFetch(domain:www.bro-productomgeving.nl)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.pdok.nl)",
+      "WebFetch(domain:mijn.pdok.nl)"
     ]
   }
 }
