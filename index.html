@@ -873,13 +873,13 @@
 
     UI.totalsEl.innerHTML = `
       <div style="margin-bottom:6px;">${selectedLine}</div>
-      <div><b>${carportCount}</b> carports • <b>${pergolaCount}</b> pergola’s</div>
+      <div><b>${carportCount}</b> carports • <b>${pergolaCount}</b> pergola's</div>
       <div><b>${totalPanels}</b> panelen • <b>${totalKwp.toFixed(2)}</b> kWp</div>
       <div><b>Verwachte opbrengst:</b> ${fmtNlInt(expectedKwh)} kWh/jaar</div>
     `;
 
-    const listEl = document.getElementById(‘uiCarportListItems’);
-    if (listEl && listEl.style.display !== ‘none’) renderCarportList();
+    const listEl = document.getElementById('uiCarportListItems');
+    if (listEl && listEl.style.display !== 'none') renderCarportList();
   }
 
   function rebuildAllPanelsAndOverlaps(){
