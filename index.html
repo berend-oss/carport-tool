@@ -462,12 +462,6 @@
     if (!isOpen) renderCarportList();
   });
 
-  function stopActiveDrawAndSelect(selectFn){
-    if (activeCarportDraw){ try { activeCarportDraw.disable(); } catch {} activeCarportDraw = null; }
-    setMode('select');
-    selectFn();
-  }
-
   function renderCarportList(){
     const el = document.getElementById('uiCarportListItems');
     if (!el) return;
@@ -484,7 +478,14 @@
       const div = document.createElement('div');
       div.className = 'cp-list-item' + (id === selectedCarportId ? ' sel' : '');
       div.innerHTML = `<b>Luifel ${i}</b> &nbsp;<span style="color:#888;font-weight:400;">${st.panels}× ${wp}Wp &nbsp;· ${st.kwp.toFixed(2)} kWp</span>`;
-      div.addEventListener('click', () => stopActiveDrawAndSelect(() => carportSelect(id)));
+      div.addEventListener('click', () => {
+        if (activeCarportDraw){ try { activeCarportDraw.disable(); } catch {} activeCarportDraw = null; }
+        carportSelect(id);
+        // Re-enable editing after all redraws have settled
+        setTimeout(() => {
+          if (selectedCarportId === id && adjustOn && mode !== 'delete') carportEnableEditForSelected();
+        }, 0);
+      });
       el.appendChild(div);
       i++;
     }
@@ -494,7 +495,10 @@
       const div = document.createElement('div');
       div.className = 'cp-list-item' + (id === selectedPergolaId ? ' sel' : '');
       div.innerHTML = `<b>Pergola ${j}</b> &nbsp;<span style="color:#888;font-weight:400;">${st.panels}× ${PERG_PANEL_WP}Wp &nbsp;· ${st.kwp.toFixed(2)} kWp</span>`;
-      div.addEventListener('click', () => stopActiveDrawAndSelect(() => pergolaSelect(id)));
+      div.addEventListener('click', () => {
+        if (activeCarportDraw){ try { activeCarportDraw.disable(); } catch {} activeCarportDraw = null; }
+        pergolaSelect(id);
+      });
       el.appendChild(div);
       j++;
     }
@@ -1468,7 +1472,11 @@
     pergolaClearUi();
     pergolaUi.activeId = selectedPergolaId;
 
-    const mA = L.marker(A, { draggable: true, icon: makeDrawHandleIcon(1) });
+    const mA = L.marker(A, { draggable: true, icon: L.divIcon({
+      className: '',
+      html: '<div style="width:30px;height:30px;background:rgba(255,255,255,0.96);border:2px solid #888;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;cursor:grab;box-shadow:0 2px 6px rgba(0,0,0,0.2);user-select:none;">✥</div>',
+      iconSize: [30, 30], iconAnchor: [15, 15]
+    })});
     const mB = L.marker(B, { draggable: true, icon: makeDrawHandleIcon(2) });
     const mC = L.marker(C, { draggable: false, icon: makeDrawHandleIcon(3) }); // custom drag
 
