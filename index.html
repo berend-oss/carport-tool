@@ -162,6 +162,8 @@
   const EXTRA_ROW_THRESHOLD_M = 0.6;
 
   const CARPORT_PANEL_WP = 585;
+  const CARPORT_SMALL_PANEL_LEN_M = 2.094;
+  const CARPORT_SMALL_PANEL_WP = 540;
   const PERG_PANEL_WP = 540;
 
   const PERG_PANEL_LEN_M = 2.0;
@@ -465,7 +467,9 @@
     }
 
     const la = cp.sideMode === clickLeft, ba = cp.sideMode === 'both', ra = cp.sideMode === clickRight;
+    const isSmall = cp.panelType === "small";
     function btnStyle(a){ return `width:30px;height:30px;border:1.5px solid #1f4f99;border-radius:6px;background:${a?'#1f4f99':'#fff'};cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;`; }
+    function typeBtnStyle(a){ return `height:22px;padding:0 6px;border:1.5px solid #1f4f99;border-radius:4px;background:${a?'#1f4f99':'#fff'};color:${a?'#fff':'#1f4f99'};font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0;`; }
 
     const toolbarHtml = `<div style="display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,0.97);border:1.5px solid #bbb;border-radius:10px;padding:4px 8px;box-shadow:0 2px 10px rgba(0,0,0,0.18);white-space:nowrap;pointer-events:all;user-select:none;">
       <button data-side="left" style="${btnStyle(la)}">${arrowSvg('left', la)}</button>
@@ -475,11 +479,14 @@
       <span style="font-size:12px;color:#555;">Lengte</span>
       <input id="${inputId}" inputmode="decimal" type="number" step="0.1" min="0" value="${lenM.toFixed(1)}" ${adjustOn && mode !== "delete" ? "" : "disabled"} style="width:52px;font-size:12px;border:1px solid #ccc;border-radius:4px;padding:2px 4px;text-align:right;box-sizing:border-box;"/>
       <span style="font-size:12px;color:#555;">m</span>
+      <span style="width:1px;height:22px;background:#ddd;margin:0 3px;flex-shrink:0;"></span>
+      <button data-type="large" style="${typeBtnStyle(!isSmall)}">Groot</button>
+      <button data-type="small" style="${typeBtnStyle(isSmall)}">Klein</button>
     </div>`;
 
     const toolbarMk = L.marker(toolbarLL, {
       interactive: true, keyboard: false,
-      icon: L.divIcon({ className: '', html: toolbarHtml, iconSize: [246, 44], iconAnchor: [123, 22] })
+      icon: L.divIcon({ className: '', html: toolbarHtml, iconSize: [330, 44], iconAnchor: [165, 22] })
     });
     toolbarMk.on('click', (e) => L.DomEvent.stopPropagation(e));
     sidePickerLayer.addLayer(toolbarMk);
@@ -538,6 +545,13 @@
           btn.addEventListener(evt, (e) => e.stopPropagation(), { passive: evt === 'touchstart' }));
         btn.addEventListener('click', (e) => { e.stopPropagation(); updateSelectedSide(side === 'left' ? clickLeft : side === 'right' ? clickRight : 'both'); });
       });
+      ['large','small'].forEach(type => {
+        const btn = toolbarMk.getElement()?.querySelector(`[data-type="${type}"]`);
+        if (!btn) return;
+        ['mousedown','mouseup','click','dblclick','touchstart','pointerdown'].forEach(evt =>
+          btn.addEventListener(evt, (e) => e.stopPropagation(), { passive: evt === 'touchstart' }));
+        btn.addEventListener('click', (e) => { e.stopPropagation(); updateCarportPanelType(type); });
+      });
       const inp = document.getElementById(inputId);
       if (!inp) return;
       ["mousedown","mouseup","click","dblclick","keydown","wheel","touchstart","pointerdown"].forEach(evt =>
@@ -555,6 +569,14 @@
     if (!selectedCarportId) return;
     carports.get(selectedCarportId).sideMode = modeVal;
     rebuildAllPanelsAndOverlaps();
+  }
+
+  function updateCarportPanelType(type){
+    if (!selectedCarportId) return;
+    carports.get(selectedCarportId).panelType = type;
+    carportRedrawPanels(selectedCarportId); recomputeOverlaps(); applyStyles(); updateTotals();
+    saveToLocalStorage();
+    carportShowPickerUI(selectedCarportId);
   }
 
   UI.deleteBtn.onclick = () => setMode(mode === "delete" ? "select" : "delete");
@@ -711,7 +733,8 @@
 
     const sides = cp.sideMode === "both" ? 2 : 1;
     const panels = rows * PANELS_PER_ROW * sides;
-    const kwp = (panels * CARPORT_PANEL_WP) / 1000;
+    const wp = cp.panelType === "small" ? CARPORT_SMALL_PANEL_WP : CARPORT_PANEL_WP;
+    const kwp = (panels * wp) / 1000;
     return { panels, kwp };
   }
 
@@ -815,6 +838,7 @@
     group.clearLayers();
     if (rows <= 0) return;
 
+    const panelLen = cp.panelType === "small" ? CARPORT_SMALL_PANEL_LEN_M : PANEL_LEN_M;
     const sides = (cp.sideMode === "both") ? ["left","right"] : [cp.sideMode];
 
     for (const side of sides){
@@ -826,9 +850,9 @@
         const p = turf.along(lineGJ, d, {units:"meters"}).geometry.coordinates;
 
         for (let k = 0; k < PANELS_PER_ROW; k++){
-          const offset = (k + 0.5) * PANEL_LEN_M;
+          const offset = (k + 0.5) * panelLen;
           const center = turf.destination(turf.point(p), offset, perp, {units:"meters"}).geometry.coordinates;
-          const corners = rectFromCenter(center, bearing, PANEL_WID_M, perp, PANEL_LEN_M);
+          const corners = rectFromCenter(center, bearing, PANEL_WID_M, perp, panelLen);
 
           const poly = L.polygon(corners, STYLE_PANEL_NORMAL);
           poly._panelOwnerType = "carport";
@@ -1017,7 +1041,7 @@
     const id = String(carportIdCounter++);
     layer._carportId = id;
 
-    carports.set(id, { layer, sideMode: "left" });
+    carports.set(id, { layer, sideMode: "left", panelType: "large" });
     carportAttachEvents(layer, id);
 
     carportSelect(id);
@@ -1712,7 +1736,7 @@
     const id = String(carportIdCounter++);
     layer._carportId = id;
     carportLines.addLayer(layer);
-    carports.set(id, { layer, sideMode: cp.sideMode });
+    carports.set(id, { layer, sideMode: cp.sideMode, panelType: cp.panelType || "large" });
     carportAttachEvents(layer, id);
     carportSelect(id);
     rebuildAllPanelsAndOverlaps();
@@ -1783,7 +1807,7 @@
     const out = { v: 1, center: [c.lat, c.lng], zoom: map.getZoom(), carports: [], pergolas: [] };
     for (const [, cp] of carports.entries()){
       const ll = cp.layer.getLatLngs();
-      out.carports.push({ latlngs: ll.map(p => [p.lat, p.lng]), sideMode: cp.sideMode });
+      out.carports.push({ latlngs: ll.map(p => [p.lat, p.lng]), sideMode: cp.sideMode, panelType: cp.panelType || "large" });
     }
     for (const [, pg] of pergolas.entries()){
       out.pergolas.push({ A: [pg.A.lat, pg.A.lng], B: [pg.B.lat, pg.B.lng], lsm: pg.lengthSignedM });
@@ -1811,7 +1835,7 @@
         const id = String(carportIdCounter++);
         layer._carportId = id;
         carportLines.addLayer(layer);
-        carports.set(id, { layer, sideMode: cp.sideMode || "left" });
+        carports.set(id, { layer, sideMode: cp.sideMode || "left", panelType: cp.panelType || "large" });
         carportAttachEvents(layer, id);
       }
       for (const pg of data.pergolas || []){
