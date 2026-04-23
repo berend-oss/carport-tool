@@ -142,6 +142,60 @@
       width: 16px;
       height: 16px;
     }
+
+    /* Hover tooltips on buttons */
+    .tip-btn { position: relative; }
+    .tip-btn::after {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: calc(100% + 7px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.82);
+      color: #fff;
+      font-size: 11px;
+      padding: 5px 9px;
+      border-radius: 7px;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s;
+      z-index: 99999;
+    }
+    .tip-btn:hover::after { opacity: 1; }
+
+    /* Small icon-only toggle button */
+    .icon-btn {
+      border: 1px solid rgba(0,0,0,0.12);
+      background: transparent;
+      border-radius: 8px;
+      width: 28px;
+      height: 28px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 0;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+    .icon-btn:hover { background: rgba(0,0,0,0.06); }
+    .icon-btn.active { background: rgba(31,79,153,0.12); border-color: rgba(31,79,153,0.4); }
+
+    /* Carport list items */
+    .cp-list-item {
+      padding: 6px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      color: #333;
+      border: 1px solid transparent;
+      margin-bottom: 3px;
+      line-height: 1.4;
+    }
+    .cp-list-item:hover { background: #f0f4ff; border-color: #c0cfee; }
+    .cp-list-item.sel { background: #e8f0fe; border-color: #1f4f99; font-weight: 600; color: #1f4f99; }
   </style>
 </head>
 <body>
@@ -333,39 +387,37 @@
     options: { position: "bottomright" },
     onAdd: function(){
       const div = L.DomUtil.create("div", "ui-card");
-      div.style.width = "320px";
+      div.style.width = "260px";
       div.innerHTML = `
-        <div class="ui-title">Solar carports</div>
-
-        <div class="ui-row">
-          <button id="uiDraw" class="btn primary" type="button">✏️ Teken Luifel</button>
-          <button id="uiDrawPergola" class="btn primary" type="button">🟦 Teken Pergola</button>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div class="ui-title" style="margin-bottom:0">☀️ Solar carports</div>
+          <button id="uiInfoToggle" class="icon-btn tip-btn active" type="button" data-tip="Projectinformatie tonen/verbergen">ℹ️</button>
         </div>
 
-        <div class="ui-row">
-          <button id="uiDelete" class="btn danger" type="button">🗑️ Verwijder</button>
-          <button id="uiClear" class="btn" type="button">🧹 Alles</button>
+        <div class="ui-row" style="gap:6px;">
+          <button id="uiDraw" class="btn primary tip-btn" type="button" data-tip="Teken een nieuwe carport-luifel" style="flex:1">✏️ Luifel</button>
+          <button id="uiDrawPergola" class="btn primary tip-btn" type="button" data-tip="Teken een nieuwe pergola" style="flex:1">🟦 Pergola</button>
+        </div>
+        <div class="ui-row" style="gap:6px;margin-top:6px;">
+          <button id="uiDelete" class="btn danger tip-btn" type="button" data-tip="Klik daarna op een luifel of pergola om te verwijderen" style="flex:1">🗑️ Verwijder</button>
+          <button id="uiClear" class="btn tip-btn" type="button" data-tip="Verwijder alle luifels en pergola's van de kaart" style="flex:1">🧹 Alles</button>
+        </div>
+        <div class="ui-row" style="gap:6px;margin-top:6px;">
+          <button id="uiExport" class="btn tip-btn" type="button" data-tip="Exporteer ontwerp als JSON-bestand" style="flex:1;font-size:16px;padding:7px 4px;">📤</button>
+          <button id="uiImport" class="btn tip-btn" type="button" data-tip="Importeer ontwerp vanuit JSON-bestand" style="flex:1;font-size:16px;padding:7px 4px;">📂</button>
+          <button id="uiZoomFit" class="btn tip-btn" type="button" data-tip="Zoom naar alle objecten op de kaart" style="flex:1;font-size:16px;padding:7px 4px;">🎯</button>
+          <button id="uiCopy" class="btn tip-btn" type="button" data-tip="Kopieer de geselecteerde luifel" style="flex:1;font-size:16px;padding:7px 4px;">📋</button>
         </div>
 
-        <div class="ui-divider"></div>
+        <div id="uiSaveStatus" class="ui-small" style="color:#888;min-height:14px;margin-top:4px;font-size:11px;"></div>
 
-        <div class="ui-row">
-          <button id="uiExport" class="btn" type="button">📤 Exporteren</button>
-          <button id="uiImport" class="btn" type="button">📂 Importeren</button>
-          <button id="uiZoomFit" class="btn" type="button">🎯 Zoom</button>
-        </div>
-        <div id="uiSaveStatus" class="ui-small" style="color:#888; min-height:16px; margin-top:4px;"></div>
-
-        <div class="ui-divider"></div>
-
-        <div class="ui-row">
-          <button id="uiCopy" class="btn" type="button">📋 Kopieer luifel</button>
-        </div>
-
-        <div class="ui-divider"></div>
-
-        <div class="ui-row">
-          <div class="ui-small" id="uiTotals"></div>
+        <div id="uiInfoPanel">
+          <div class="ui-divider"></div>
+          <div id="uiTotals" class="ui-small"></div>
+          <div style="margin-top:8px;">
+            <button id="uiCarportListBtn" class="btn tip-btn" type="button" data-tip="Toon een klikbare lijst van alle getekende luifels" style="width:100%;font-size:12px;padding:5px 8px;text-align:left;">🗂 Alle luifels ▾</button>
+          </div>
+          <div id="uiCarportListItems" style="display:none;margin-top:4px;max-height:180px;overflow-y:auto;"></div>
         </div>
       `;
       L.DomEvent.disableClickPropagation(div);
@@ -389,6 +441,47 @@
   UI.suggEl    = document.getElementById("uiSuggestions");
 
   UI.totalsEl  = document.getElementById("uiTotals");
+
+  // Info panel toggle
+  document.getElementById('uiInfoToggle').addEventListener('click', () => {
+    const panel = document.getElementById('uiInfoPanel');
+    const btn   = document.getElementById('uiInfoToggle');
+    const isOpen = panel.style.display !== 'none';
+    panel.style.display = isOpen ? 'none' : '';
+    btn.classList.toggle('active', !isOpen);
+  });
+
+  // Carport list toggle
+  document.getElementById('uiCarportListBtn').addEventListener('click', () => {
+    const list  = document.getElementById('uiCarportListItems');
+    const isOpen = list.style.display !== 'none';
+    list.style.display = isOpen ? 'none' : 'block';
+    document.getElementById('uiCarportListBtn').innerHTML = isOpen
+      ? '🗂 Alle luifels ▾' : '🗂 Alle luifels ▴';
+    if (!isOpen) renderCarportList();
+  });
+
+  function renderCarportList(){
+    const el = document.getElementById('uiCarportListItems');
+    if (!el) return;
+    if (carports.size === 0){
+      el.innerHTML = '<div class="ui-small" style="padding:6px 4px;color:#aaa;">Geen luifels getekend.</div>';
+      return;
+    }
+    el.innerHTML = '';
+    let i = 1;
+    for (const [id, cp] of carports.entries()){
+      const st = computeCarportStats(id);
+      const wp = cp.panelType === "small" ? CARPORT_SMALL_PANEL_WP : CARPORT_PANEL_WP;
+      const typeLabel = cp.panelType === "small" ? "Klein" : "Groot";
+      const div = document.createElement('div');
+      div.className = 'cp-list-item' + (id === selectedCarportId ? ' sel' : '');
+      div.innerHTML = `<b>Luifel ${i}</b> &nbsp;<span style="color:#888;font-weight:400;">${typeLabel} · ${st.panels}× ${wp}Wp · ${st.kwp.toFixed(2)} kWp</span>`;
+      div.addEventListener('click', () => { carportSelect(id); });
+      el.appendChild(div);
+      i++;
+    }
+  }
 
   function setMode(newMode){
     mode = newMode;
@@ -770,18 +863,23 @@
     let selectedLine = "Geen selectie.";
     if (selectedCarportId){
       const st = computeCarportStats(selectedCarportId);
-      selectedLine = `Carport ${selectedCarportId}: ${st.panels} panelen • ${st.kwp.toFixed(2)} kWp`;
+      const cp = carports.get(selectedCarportId);
+      const wp = cp.panelType === "small" ? CARPORT_SMALL_PANEL_WP : CARPORT_PANEL_WP;
+      selectedLine = `Carport ${selectedCarportId}: <b>${st.panels}</b> panelen van ${wp}Wp &nbsp;• <b>${st.kwp.toFixed(2)}</b> kWp`;
     } else if (selectedPergolaId){
       const st = computePergolaStats(selectedPergolaId);
-      selectedLine = `Pergola ${selectedPergolaId}: ${st.panels} panelen • ${st.kwp.toFixed(2)} kWp`;
+      selectedLine = `Pergola ${selectedPergolaId}: <b>${st.panels}</b> panelen • <b>${st.kwp.toFixed(2)}</b> kWp`;
     }
 
     UI.totalsEl.innerHTML = `
-      <div class="ui-small" style="margin-bottom:6px;"><b>${selectedLine}</b></div>
+      <div style="margin-bottom:6px;">${selectedLine}</div>
       <div><b>${carportCount}</b> carports • <b>${pergolaCount}</b> pergola’s</div>
       <div><b>${totalPanels}</b> panelen • <b>${totalKwp.toFixed(2)}</b> kWp</div>
       <div><b>Verwachte opbrengst:</b> ${fmtNlInt(expectedKwh)} kWh/jaar</div>
     `;
+
+    const listEl = document.getElementById(‘uiCarportListItems’);
+    if (listEl && listEl.style.display !== ‘none’) renderCarportList();
   }
 
   function rebuildAllPanelsAndOverlaps(){
