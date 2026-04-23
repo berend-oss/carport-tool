@@ -536,7 +536,7 @@
         if (!btn) return;
         ['mousedown','mouseup','click','dblclick','touchstart','pointerdown'].forEach(evt =>
           btn.addEventListener(evt, (e) => e.stopPropagation(), { passive: evt === 'touchstart' }));
-        btn.addEventListener('click', (e) => { e.stopPropagation(); updateSelectedSide(side); });
+        btn.addEventListener('click', (e) => { e.stopPropagation(); updateSelectedSide(side === 'left' ? clickLeft : side === 'right' ? clickRight : 'both'); });
       });
       const inp = document.getElementById(inputId);
       if (!inp) return;
