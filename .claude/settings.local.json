@@ -1,7 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node *)"
+      "Bash(node *)",
+      "Bash(grep -oP '\"type\":\"text\",\"text\":\".{0,200}\"')",
+      "Bash(grep -oP '\"type\":\"text\",\"text\":\"[^\"]{20,400}\"')",
+      "Bash(grep -oP '\"role\":\"user\",\"content\":\\\\[{\"type\":\"text\",\"text\":\"[^\"]{10,300}\"')",
+      "Bash(grep -oP '\"type\":\"text\",\"text\":\"[^\"]{20,600}\"')",
+      "Bash(grep -oP '\"type\":\"\\(text|human\\)\",\"text\":\"[^\"]{20,600}\"')",
+      "Bash(grep -oP '\"role\":\"user\",\"content\":\"\\\\[{\\\\\"type\\\\\":\\\\\"text\\\\\",\\\\\"text\\\\\":\\\\\"[^\"]{10,300}\"')",
+      "Bash(grep -oP '\"type\":\"user\",\"message\":\\\\{\"role\":\"user\",\"content\":\\\\[{\"type\":\"text\",\"text\":\"[^\"]*\"')",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
