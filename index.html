@@ -143,20 +143,25 @@
       height: 16px;
     }
 
-    /* Hover tooltips on buttons */
+    /* Hover tooltips on buttons — anchored to the right edge so they
+       extend leftward into the viewport instead of off-screen
+       (all .tip-btn buttons live in the bottom-right toolbox). */
     .tip-btn { position: relative; }
     .tip-btn::after {
       content: attr(data-tip);
       position: absolute;
       bottom: calc(100% + 7px);
-      left: 50%;
-      transform: translateX(-50%);
+      right: 0;
       background: rgba(0,0,0,0.82);
       color: #fff;
       font-size: 11px;
       padding: 5px 9px;
       border-radius: 7px;
-      white-space: nowrap;
+      max-width: 240px;
+      white-space: normal;
+      word-break: keep-all;
+      text-align: left;
+      line-height: 1.35;
       pointer-events: none;
       opacity: 0;
       transition: opacity 0.15s;
@@ -731,8 +736,6 @@
   let measurePoints = [];
   let measureDotMarkers = [];
   let measureSelected = false;
-  let _measureLastClickTime = 0;
-  let _measureLastClickLL   = null;
 
   const pergolaDraw = { active:false, step:0, A:null, B:null, snappedC:null, mA:null, mB:null, mC:null };
 
@@ -2126,25 +2129,29 @@
     pergolaTipShow(e.latlng);
   });
 
+  // Native dblclick ends measurement. The preceding two click events
+  // already pushed points; drop the duplicate second one so we don't
+  // leave a zero-length segment at the tail.
+  map.on("dblclick", (e) => {
+    if (!measureMode) return;
+    L.DomEvent.stopPropagation(e);
+    L.DomEvent.preventDefault(e);
+    if (measurePoints.length >= 2){
+      const last = measurePoints[measurePoints.length - 1];
+      const prev = measurePoints[measurePoints.length - 2];
+      const pLast = map.latLngToContainerPoint(last);
+      const pPrev = map.latLngToContainerPoint(prev);
+      if (Math.hypot(pLast.x - pPrev.x, pLast.y - pPrev.y) < 12) measurePoints.pop();
+    }
+    if (measurePreviewLine){ map.removeLayer(measurePreviewLine); measurePreviewLine = null; }
+    stopMeasure(true);
+  });
+
   map.on("click", (e) => {
     if (suppressNextMapClick) return;
     if (mode === "delete") return;
 
     if (measureMode){
-      const now = Date.now();
-      if (_measureLastClickLL){
-        const p1 = map.latLngToContainerPoint(e.latlng);
-        const p2 = map.latLngToContainerPoint(_measureLastClickLL);
-        const px = Math.hypot(p1.x - p2.x, p1.y - p2.y);
-        if (now - _measureLastClickTime < 600 && px < 24){
-          if (measurePreviewLine){ map.removeLayer(measurePreviewLine); measurePreviewLine = null; }
-          _measureLastClickTime = 0; _measureLastClickLL = null;
-          stopMeasure(true);
-          return;
-        }
-      }
-      _measureLastClickTime = now;
-      _measureLastClickLL   = e.latlng;
       measurePoints.push(e.latlng);
       measureRedraw();
       return;
@@ -2440,7 +2447,6 @@
 
   function stopMeasure(keepResult){
     measureMode = false;
-    _measureLastClickTime = 0; _measureLastClickLL = null;
     if (measurePreviewLine){ map.removeLayer(measurePreviewLine); measurePreviewLine = null; }
     if (!keepResult){
       measurePoints = [];
