@@ -857,11 +857,15 @@
       const div = document.createElement('div');
       div.className = 'cp-list-item' + (id === selectedCarportId ? ' sel' : '');
       div.innerHTML = `<b>Luifel ${i}</b> &nbsp;<span style="color:#888;font-weight:400;">${st.panels}× ${wp}Wp &nbsp;· ${st.kwp.toFixed(2)} kWp</span>`;
-      div.addEventListener('click', () => {
+      div.addEventListener('click', (ev) => {
+        // carportSelect re-renders this very list synchronously, which detaches
+        // the clicked <div>. Without stopping propagation the bubble phase then
+        // reaches the map and the background-click handler wipes the selection.
+        ev.stopPropagation();
+        L.DomEvent.stopPropagation(ev);
         if (activeCarportDraw){ try { activeCarportDraw.disable(); } catch {} activeCarportDraw = null; }
         carportSelect(id);
         flyToCarport(id);
-        // Re-enable editing after all redraws have settled
         setTimeout(() => {
           if (selectedCarportId === id && adjustOn && mode !== 'delete') carportEnableEditForSelected();
         }, 0);
@@ -875,7 +879,9 @@
       const div = document.createElement('div');
       div.className = 'cp-list-item' + (id === selectedPergolaId ? ' sel' : '');
       div.innerHTML = `<b>Pergola ${j}</b> &nbsp;<span style="color:#888;font-weight:400;">${st.panels}× ${PERG_PANEL_WP}Wp &nbsp;· ${st.kwp.toFixed(2)} kWp</span>`;
-      div.addEventListener('click', () => {
+      div.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        L.DomEvent.stopPropagation(ev);
         if (activeCarportDraw){ try { activeCarportDraw.disable(); } catch {} activeCarportDraw = null; }
         pergolaSelect(id);
         flyToPergola(id);
