@@ -860,6 +860,7 @@
       div.addEventListener('click', () => {
         if (activeCarportDraw){ try { activeCarportDraw.disable(); } catch {} activeCarportDraw = null; }
         carportSelect(id);
+        flyToCarport(id);
         // Re-enable editing after all redraws have settled
         setTimeout(() => {
           if (selectedCarportId === id && adjustOn && mode !== 'delete') carportEnableEditForSelected();
@@ -877,10 +878,28 @@
       div.addEventListener('click', () => {
         if (activeCarportDraw){ try { activeCarportDraw.disable(); } catch {} activeCarportDraw = null; }
         pergolaSelect(id);
+        flyToPergola(id);
       });
       el.appendChild(div);
       j++;
     }
+  }
+
+  // Smoothly frame a single object from the list so its edit handles stay
+  // reachable without zooming so deep that the panels fill the whole screen.
+  function flyToLayerBounds(layer){
+    if (!layer || typeof layer.getBounds !== "function") return;
+    const b = layer.getBounds();
+    if (!b.isValid()) return;
+    map.flyToBounds(b.pad(0.4), { maxZoom: 20, duration: 0.6 });
+  }
+  function flyToCarport(id){
+    const cp = carports.get(id);
+    if (cp) flyToLayerBounds(cp.layer);
+  }
+  function flyToPergola(id){
+    const pg = pergolas.get(id);
+    if (pg) flyToLayerBounds(pg.layer);
   }
 
   function setMode(newMode){
