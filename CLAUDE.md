@@ -46,8 +46,15 @@ ROW_SPACING_M = 1.4       EXTRA_ROW_THRESHOLD_M = 0.6
 CARPORT_PANEL_WP = 585    CARPORT_SMALL_PANEL_LEN_M = 2.094   CARPORT_SMALL_PANEL_WP = 540
 PERG_PANEL_WP = 540       PERG_PANEL_LEN_M = 2.0  PERG_PANEL_WID_M = 1.14
 PERG_PAIR_LEN_M = 4.0     PERG_PAIR_WID_M = 1.14  PERG_EXTRA_THRESHOLD = 0.90
-KWH_PER_KWP = 880
+CARPORT_TILT_DEG = 10     PERGOLA_TILT_DEG = 22   BIFACIAL_GAIN = 0.06
+PVGIS_LOSS = 14
 ```
+
+## Yield estimation
+Annual yield is estimated via the PVGIS PVcalc API (`re.jrc.ec.europa.eu/api/v5_2/PVcalc`) per (location, tilt, azimuth). Results are cached in `localStorage` under `pvgis:<lat>:<lon>:<tilt>:<az>`. While a fetch is pending an embedded NL fallback table (`NL_FALLBACK_TABLE`) is used so totals never block; updateTotals is re-called when the real value arrives. Bifacial gain is applied as a flat multiplier (~17% albedo × 75% BFF), toggleable via `bifacialOn`.
+
+- Carport: panels at 10° tilt, azimuth = bearing ± 90° per side. "both" = half kWp on each perpendicular.
+- Pergola: V-roof at 22°; half kWp at azimuth `bearing`, half at `bearing + 180°`.
 
 ## Key functions
 - `rebuildAllPanelsAndOverlaps()` — redraws all panels, overlaps, styles, totals, UI. Call after any structural change.
