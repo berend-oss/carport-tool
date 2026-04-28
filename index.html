@@ -1297,7 +1297,11 @@
      Calls are async. While a fetch is pending an embedded NL fallback
      table is used so totals never block; once PVGIS responds we
      re-render via updateTotals(). */
+  // PVGIS staat geen directe browser-fetch toe (geen CORS-headers), dus
+  // routeren we via een gratis CORS-proxy. Bij uitval valt de tool
+  // automatisch terug op de NL-tabel met latitude-correctie.
   const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_2/PVcalc';
+  const CORS_PROXY = 'https://corsproxy.io/?';
   const PVGIS_LOSS = 14;
   const CARPORT_TILT_DEG = 10;
   const PERGOLA_TILT_DEG = 22;
@@ -1360,9 +1364,10 @@
 
   async function fetchPvgisYield(lat, lon, tilt, azCompass){
     const aspect = compassToPvgisAspect(azCompass);
-    const url = `${PVGIS_URL}?lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}` +
+    const pvgisUrl = `${PVGIS_URL}?lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}` +
                 `&peakpower=1&loss=${PVGIS_LOSS}&angle=${tilt}&aspect=${aspect}` +
                 `&outputformat=json`;
+    const url = CORS_PROXY + encodeURIComponent(pvgisUrl);
     const res = await fetch(url);
     if (!res.ok) throw new Error('PVGIS HTTP ' + res.status);
     const data = await res.json();
