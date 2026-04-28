@@ -1318,6 +1318,10 @@
   const yieldPending = new Set(); // keys currently being fetched
   const yieldFailedAt = new Map(); // key -> timestamp of last fetch failure
   const PVGIS_RETRY_COOLDOWN_MS = 60_000;
+  // Set to true while updateTotals is running if any value came from the
+  // fallback table instead of a real PVGIS response. Reset at top of
+  // updateTotals; checked at the bottom for UI labelling.
+  let lastUpdateUsedFallback = false;
 
   function compassToPvgisAspect(azCompass){
     // Compass: 0=N, 90=E, 180=S, 270=W
@@ -1336,11 +1340,12 @@
     return `${la}:${lo}:${tilt}:${az}`;
   }
 
-  // NL 52°N fallback table, 14% loss. dev = abs azimuth deviation from south.
-  // Sampled at dev = 0°, 45°, 90°, 135°, 180°.
+  // NL fallback table (lat 52.0, lon 5.1 — centraal NL, 14% systeemverlies),
+  // direct opgehaald bij PVGIS API v5_2 in april 2026. dev = abs azimuth
+  // deviation from south, gesampled op 0°, 45°, 90°, 135°, 180°.
   const NL_FALLBACK_TABLE = {
-    10: [870, 855, 825, 790, 760],
-    22: [895, 870, 825, 750, 695]
+    10: [945, 921, 863, 802, 775],
+    22: [1009, 964, 848, 719, 664]
   };
 
   // Lineaire latitude-correctie voor NL (~52° N referentie). Zuidelijker = meer
@@ -1393,6 +1398,7 @@
     // fallback long-term, so different locations keep their own variation.
     const failedAt = yieldFailedAt.get(key);
     if (failedAt && (Date.now() - failedAt) < PVGIS_RETRY_COOLDOWN_MS){
+      lastUpdateUsedFallback = true;
       return fallbackSpecificYield(tilt, azCompass, lat);
     }
 
@@ -1415,6 +1421,7 @@
         updateTotals();
       });
     }
+    lastUpdateUsedFallback = true;
     return fallbackSpecificYield(tilt, azCompass, lat);
   }
 
@@ -1503,6 +1510,7 @@
   }
 
   function updateTotals(){
+    lastUpdateUsedFallback = false;
     const carportCount = carports.size;
     const pergolaCount = pergolas.size;
 
@@ -1543,13 +1551,16 @@
       : `monofaciaal`;
     const pendingNote = yieldPending.size > 0 ? ' <span style="color:#aaa;">(berekenen…)</span>' : '';
     const totalSpecific = totalKwp > 0 ? Math.round(totalKwh / totalKwp) : 0;
+    const sourceNote = lastUpdateUsedFallback
+      ? '<span style="color:#b07000;">NL-tabel (PVGIS niet bereikbaar)</span>'
+      : 'PVGIS';
 
     UI.totalsEl.innerHTML = `
       <div style="margin-bottom:6px;">${selectedLine}</div>
       <div><b>${carportCount}</b> carports • <b>${pergolaCount}</b> pergola's</div>
       <div><b>${totalPanels}</b> panelen • <b>${totalKwp.toFixed(2)}</b> kWp</div>
       <div><b>Schatting opbrengst:</b> ${fmtNlInt(totalKwh)} kWh/jaar &nbsp;• <b>${totalSpecific}</b> kWh/kWp${pendingNote}</div>
-      <div style="font-size:10.5px;color:#888;margin-top:2px;">PVGIS · ${bifNote}</div>
+      <div style="font-size:10.5px;color:#888;margin-top:2px;">${sourceNote} · ${bifNote}</div>
     `;
 
     const listEl = document.getElementById('uiCarportListItems');
