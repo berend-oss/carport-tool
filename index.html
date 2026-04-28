@@ -893,11 +893,13 @@
     for (const [id, cp] of carports.entries()){
       const st = computeCarportStats(id);
       const wp = cp.panelType === "small" ? CARPORT_SMALL_PANEL_WP : CARPORT_PANEL_WP;
-      const kwh = computeCarportYieldKwh(id);
-      const sp  = st.kwp > 0 ? Math.round(kwh / st.kwp) : 0;
+      const kwh   = computeCarportYieldKwh(id, true);
+      const kwhUS = computeCarportYieldKwh(id, false);
+      const sp    = st.kwp > 0 ? Math.round(kwh / st.kwp) : 0;
+      const shade = formatShading(kwh, kwhUS);
       const div = document.createElement('div');
       div.className = 'cp-list-item' + (id === selectedCarportId ? ' sel' : '');
-      div.innerHTML = `<b>Luifel ${i}</b> &nbsp;<span style="color:#888;font-weight:400;">${st.panels}× ${wp}Wp · ${st.kwp.toFixed(2)} kWp · ${fmtNlInt(kwh)} kWh/jr · ${sp} kWh/kWp</span>`;
+      div.innerHTML = `<b>Luifel ${i}</b> &nbsp;<span style="color:#888;font-weight:400;">${st.panels}× ${wp}Wp · ${st.kwp.toFixed(2)} kWp · ${fmtNlInt(kwh)} kWh/jr${shade} · ${sp} kWh/kWp</span>`;
       div.addEventListener('click', (ev) => {
         // carportSelect re-renders this very list synchronously, which detaches
         // the clicked <div>. Without stopping propagation the bubble phase then
@@ -917,11 +919,13 @@
     let j = 1;
     for (const [id] of pergolas.entries()){
       const st = computePergolaStats(id);
-      const kwh = computePergolaYieldKwh(id);
-      const sp  = st.kwp > 0 ? Math.round(kwh / st.kwp) : 0;
+      const kwh   = computePergolaYieldKwh(id, true);
+      const kwhUS = computePergolaYieldKwh(id, false);
+      const sp    = st.kwp > 0 ? Math.round(kwh / st.kwp) : 0;
+      const shade = formatShading(kwh, kwhUS);
       const div = document.createElement('div');
       div.className = 'cp-list-item' + (id === selectedPergolaId ? ' sel' : '');
-      div.innerHTML = `<b>Pergola ${j}</b> &nbsp;<span style="color:#888;font-weight:400;">${st.panels}× ${PERG_PANEL_WP}Wp · ${st.kwp.toFixed(2)} kWp · ${fmtNlInt(kwh)} kWh/jr · ${sp} kWh/kWp</span>`;
+      div.innerHTML = `<b>Pergola ${j}</b> &nbsp;<span style="color:#888;font-weight:400;">${st.panels}× ${PERG_PANEL_WP}Wp · ${st.kwp.toFixed(2)} kWp · ${fmtNlInt(kwh)} kWh/jr${shade} · ${sp} kWh/kWp</span>`;
       div.addEventListener('click', (ev) => {
         ev.stopPropagation();
         L.DomEvent.stopPropagation(ev);
@@ -1476,15 +1480,18 @@
     return E_y;
   }
 
-  function getSpecificYield(lat, lon, tilt, azCompass){
+  function getSpecificYield(lat, lon, tilt, azCompass, useHorizon = true){
     // Eerst horizon (schaduw) zoeken/inkickoffen. Als die nog niet klaar is,
     // wachten we — fallback wordt gebruikt zonder schaduw mee te rekenen.
-    const horizon = getCachedHorizon(lat, lon);
-    if (!horizon){
-      ensureHorizon(lat, lon);
-      lastUpdateHorizonPending = true;
-      lastUpdateUsedFallback = true;
-      return fallbackSpecificYield(tilt, azCompass, lat);
+    let horizon = null;
+    if (useHorizon){
+      horizon = getCachedHorizon(lat, lon);
+      if (!horizon){
+        ensureHorizon(lat, lon);
+        lastUpdateHorizonPending = true;
+        lastUpdateUsedFallback = true;
+        return fallbackSpecificYield(tilt, azCompass, lat);
+      }
     }
 
     const key = yieldKey(lat, lon, tilt, azCompass, horizon);
@@ -1509,7 +1516,7 @@
 
     if (!yieldPending.has(key)){
       yieldPending.add(key);
-      fetchPvgisYield(lat, lon, tilt, azCompass, horizon).then(v => {
+      fetchPvgisYield(lat, lon, tilt, azCompass, horizon || undefined).then(v => {
         yieldCache.set(key, v);
         yieldFailedAt.delete(key);
         try { localStorage.setItem(PVGIS_LS_PREFIX + key, String(v)); } catch {}
@@ -1532,7 +1539,16 @@
 
   function bifacialMultiplier(){ return bifacialOn ? (1 + BIFACIAL_GAIN) : 1; }
 
-  function computeCarportYieldKwh(carportId){
+  // Helper: render shading reduction as " (− X% schaduw)" or empty if minimal.
+  function formatShading(shadedKwh, unshadedKwh){
+    if (!unshadedKwh || shadedKwh >= unshadedKwh - 1) return '';
+    const lossPct = (1 - shadedKwh / unshadedKwh) * 100;
+    if (lossPct < 0.5) return '';
+    const color = lossPct >= 10 ? '#b00020' : lossPct >= 5 ? '#b07000' : '#888';
+    return ` <span style="color:${color};">(− ${lossPct.toFixed(1).replace('.', ',')}% schaduw)</span>`;
+  }
+
+  function computeCarportYieldKwh(carportId, useHorizon = true){
     const cp = carports.get(carportId);
     if (!cp) return 0;
     const stats = computeCarportStats(carportId);
@@ -1557,17 +1573,17 @@
     const bif = bifacialMultiplier();
 
     if (cp.sideMode === 'left'){
-      return stats.kwp * getSpecificYield(lat, lon, CARPORT_TILT_DEG, azLeft) * bif;
+      return stats.kwp * getSpecificYield(lat, lon, CARPORT_TILT_DEG, azLeft, useHorizon) * bif;
     } else if (cp.sideMode === 'right'){
-      return stats.kwp * getSpecificYield(lat, lon, CARPORT_TILT_DEG, azRight) * bif;
+      return stats.kwp * getSpecificYield(lat, lon, CARPORT_TILT_DEG, azRight, useHorizon) * bif;
     } else {
       const half = stats.kwp / 2;
-      return (half * getSpecificYield(lat, lon, CARPORT_TILT_DEG, azLeft)
-            + half * getSpecificYield(lat, lon, CARPORT_TILT_DEG, azRight)) * bif;
+      return (half * getSpecificYield(lat, lon, CARPORT_TILT_DEG, azLeft, useHorizon)
+            + half * getSpecificYield(lat, lon, CARPORT_TILT_DEG, azRight, useHorizon)) * bif;
     }
   }
 
-  function computePergolaYieldKwh(pergolaId){
+  function computePergolaYieldKwh(pergolaId, useHorizon = true){
     const pg = pergolas.get(pergolaId);
     if (!pg) return 0;
     const stats = computePergolaStats(pergolaId);
@@ -1584,8 +1600,8 @@
     const az2 = (bearing + 180) % 360;
     const half = stats.kwp / 2;
     const bif = bifacialMultiplier();
-    return (half * getSpecificYield(lat, lon, PERGOLA_TILT_DEG, az1)
-          + half * getSpecificYield(lat, lon, PERGOLA_TILT_DEG, az2)) * bif;
+    return (half * getSpecificYield(lat, lon, PERGOLA_TILT_DEG, az1, useHorizon)
+          + half * getSpecificYield(lat, lon, PERGOLA_TILT_DEG, az2, useHorizon)) * bif;
   }
 
   function computeCarportStats(carportId){
@@ -1623,18 +1639,21 @@
     let totalPanels = 0;
     let totalKwp = 0;
     let totalKwh = 0;
+    let totalKwhUnshaded = 0;
 
     for (const [id] of carports.entries()){
       const st = computeCarportStats(id);
       totalPanels += st.panels;
       totalKwp += st.kwp;
-      totalKwh += computeCarportYieldKwh(id);
+      totalKwh += computeCarportYieldKwh(id, true);
+      totalKwhUnshaded += computeCarportYieldKwh(id, false);
     }
     for (const [id] of pergolas.entries()){
       const st = computePergolaStats(id);
       totalPanels += st.panels;
       totalKwp += st.kwp;
-      totalKwh += computePergolaYieldKwh(id);
+      totalKwh += computePergolaYieldKwh(id, true);
+      totalKwhUnshaded += computePergolaYieldKwh(id, false);
     }
 
     let selectedLine = "Geen selectie.";
@@ -1642,14 +1661,18 @@
       const st = computeCarportStats(selectedCarportId);
       const cp = carports.get(selectedCarportId);
       const wp = cp.panelType === "small" ? CARPORT_SMALL_PANEL_WP : CARPORT_PANEL_WP;
-      const kwh = computeCarportYieldKwh(selectedCarportId);
-      const sp  = st.kwp > 0 ? Math.round(kwh / st.kwp) : 0;
-      selectedLine = `Carport ${selectedCarportId}: <b>${st.panels}</b> panelen van ${wp}Wp &nbsp;• <b>${st.kwp.toFixed(2)}</b> kWp &nbsp;• <b>${fmtNlInt(kwh)}</b> kWh/jr &nbsp;• <b>${sp}</b> kWh/kWp`;
+      const kwh   = computeCarportYieldKwh(selectedCarportId, true);
+      const kwhUS = computeCarportYieldKwh(selectedCarportId, false);
+      const sp    = st.kwp > 0 ? Math.round(kwh / st.kwp) : 0;
+      const shadeNote = formatShading(kwh, kwhUS);
+      selectedLine = `Carport ${selectedCarportId}: <b>${st.panels}</b> panelen van ${wp}Wp &nbsp;• <b>${st.kwp.toFixed(2)}</b> kWp &nbsp;• <b>${fmtNlInt(kwh)}</b> kWh/jr${shadeNote} &nbsp;• <b>${sp}</b> kWh/kWp`;
     } else if (selectedPergolaId){
       const st = computePergolaStats(selectedPergolaId);
-      const kwh = computePergolaYieldKwh(selectedPergolaId);
-      const sp  = st.kwp > 0 ? Math.round(kwh / st.kwp) : 0;
-      selectedLine = `Pergola ${selectedPergolaId}: <b>${st.panels}</b> panelen van ${PERG_PANEL_WP}Wp &nbsp;• <b>${st.kwp.toFixed(2)}</b> kWp &nbsp;• <b>${fmtNlInt(kwh)}</b> kWh/jr &nbsp;• <b>${sp}</b> kWh/kWp`;
+      const kwh   = computePergolaYieldKwh(selectedPergolaId, true);
+      const kwhUS = computePergolaYieldKwh(selectedPergolaId, false);
+      const sp    = st.kwp > 0 ? Math.round(kwh / st.kwp) : 0;
+      const shadeNote = formatShading(kwh, kwhUS);
+      selectedLine = `Pergola ${selectedPergolaId}: <b>${st.panels}</b> panelen van ${PERG_PANEL_WP}Wp &nbsp;• <b>${st.kwp.toFixed(2)}</b> kWp &nbsp;• <b>${fmtNlInt(kwh)}</b> kWh/jr${shadeNote} &nbsp;• <b>${sp}</b> kWh/kWp`;
     }
 
     const bifNote = bifacialOn
@@ -1663,11 +1686,13 @@
       ? '<span style="color:#b07000;">NL-tabel (PVGIS niet bereikbaar)</span>'
       : 'PVGIS + AHN4-schaduw';
 
+    const totalShadeNote = formatShading(totalKwh, totalKwhUnshaded);
+
     UI.totalsEl.innerHTML = `
       <div style="margin-bottom:6px;">${selectedLine}</div>
       <div><b>${carportCount}</b> carports • <b>${pergolaCount}</b> pergola's</div>
       <div><b>${totalPanels}</b> panelen • <b>${totalKwp.toFixed(2)}</b> kWp</div>
-      <div><b>Schatting opbrengst:</b> ${fmtNlInt(totalKwh)} kWh/jaar &nbsp;• <b>${totalSpecific}</b> kWh/kWp${pvgisPendingNote}${horizonPendingNote}</div>
+      <div><b>Schatting opbrengst:</b> ${fmtNlInt(totalKwh)} kWh/jaar${totalShadeNote} &nbsp;• <b>${totalSpecific}</b> kWh/kWp${pvgisPendingNote}${horizonPendingNote}</div>
       <div style="font-size:10.5px;color:#888;margin-top:2px;">${sourceNote} · ${bifNote}</div>
     `;
 
