@@ -623,8 +623,36 @@
     { layers: "soilarea", format: "image/png", transparent: true, maxZoom: 22, opacity: 0.6 }
   );
 
+  /* ── Cyclomedia aerial imagery ──────────────────────────────────
+     Fill in the values below once Cyclomedia provides them.
+     - CYCLO_AERIAL_URL: tile URL template with {x} {y} {z} placeholders.
+       For WMTS in Web Mercator (EPSG:3857) Cyclomedia typically gives
+       something like:
+         https://atlasapi.cyclomedia.com/...{layer}/{z}/{x}/{y}.jpg?apiKey=<KEY>
+       Replace the entire string below with whatever they hand you,
+       leaving the {x}/{y}/{z} placeholders intact.
+     - CYCLO_AERIAL_KEY: your API key. If your URL already has it
+       embedded, you can leave this blank.
+     If CYCLO_AERIAL_URL is empty the layer simply isn't registered. */
+  const CYCLO_AERIAL_URL = "";       // e.g. "https://atlasapi.cyclomedia.com/.../{z}/{x}/{y}.jpg?apiKey={key}"
+  const CYCLO_AERIAL_KEY = "";       // e.g. "abcd1234..."
+  const CYCLO_AERIAL_ATTR = "© Cyclomedia";
+
+  let cycloAerial = null;
+  if (CYCLO_AERIAL_URL){
+    const url = CYCLO_AERIAL_URL.replace("{key}", CYCLO_AERIAL_KEY);
+    cycloAerial = L.tileLayer(url, {
+      maxZoom: 22,
+      maxNativeZoom: 21,
+      attribution: CYCLO_AERIAL_ATTR
+    });
+  }
+
+  const baseLayers = { "PDOK Luchtfoto": pdokLuchtfoto, "OpenStreetMap": osm };
+  if (cycloAerial) baseLayers["Cyclomedia Lucht (HR)"] = cycloAerial;
+
   L.control.layers(
-    { "PDOK Luchtfoto": pdokLuchtfoto, "OpenStreetMap": osm },
+    baseLayers,
     {
       "Perceelgrenzen (Kadaster)": pdokPercelen,
       "Hoogtekaart (AHN4)": ahn4,
