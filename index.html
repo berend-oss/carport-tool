@@ -821,9 +821,9 @@
           <div class="ui-divider"></div>
           <div id="uiTotals" class="ui-small"></div>
           <div class="ui-row" style="margin-top:6px;font-size:11.5px;">
-            <label class="tip-btn" data-tip="Schat extra opbrengst van bifaciale panelen (≈+6% bij asfalt/tegels)" style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;">
+            <label class="tip-btn" data-tip="Schat extra opbrengst van bifaciale panelen (≈+7% bij asfalt/tegels, albedo 20%)" style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;">
               <input type="checkbox" id="uiBifacial" checked style="margin:0;"/>
-              Bifaciale panelen (+${(0.06*100).toFixed(0)}%)
+              Bifaciale panelen (+7%)
             </label>
           </div>
           <div style="margin-top:6px;">
@@ -894,9 +894,10 @@
       const st = computeCarportStats(id);
       const wp = cp.panelType === "small" ? CARPORT_SMALL_PANEL_WP : CARPORT_PANEL_WP;
       const kwh = computeCarportYieldKwh(id);
+      const sp  = st.kwp > 0 ? Math.round(kwh / st.kwp) : 0;
       const div = document.createElement('div');
       div.className = 'cp-list-item' + (id === selectedCarportId ? ' sel' : '');
-      div.innerHTML = `<b>Luifel ${i}</b> &nbsp;<span style="color:#888;font-weight:400;">${st.panels}× ${wp}Wp · ${st.kwp.toFixed(2)} kWp · ${fmtNlInt(kwh)} kWh/jr</span>`;
+      div.innerHTML = `<b>Luifel ${i}</b> &nbsp;<span style="color:#888;font-weight:400;">${st.panels}× ${wp}Wp · ${st.kwp.toFixed(2)} kWp · ${fmtNlInt(kwh)} kWh/jr · ${sp} kWh/kWp</span>`;
       div.addEventListener('click', (ev) => {
         // carportSelect re-renders this very list synchronously, which detaches
         // the clicked <div>. Without stopping propagation the bubble phase then
@@ -917,9 +918,10 @@
     for (const [id] of pergolas.entries()){
       const st = computePergolaStats(id);
       const kwh = computePergolaYieldKwh(id);
+      const sp  = st.kwp > 0 ? Math.round(kwh / st.kwp) : 0;
       const div = document.createElement('div');
       div.className = 'cp-list-item' + (id === selectedPergolaId ? ' sel' : '');
-      div.innerHTML = `<b>Pergola ${j}</b> &nbsp;<span style="color:#888;font-weight:400;">${st.panels}× ${PERG_PANEL_WP}Wp · ${st.kwp.toFixed(2)} kWp · ${fmtNlInt(kwh)} kWh/jr</span>`;
+      div.innerHTML = `<b>Pergola ${j}</b> &nbsp;<span style="color:#888;font-weight:400;">${st.panels}× ${PERG_PANEL_WP}Wp · ${st.kwp.toFixed(2)} kWp · ${fmtNlInt(kwh)} kWh/jr · ${sp} kWh/kWp</span>`;
       div.addEventListener('click', (ev) => {
         ev.stopPropagation();
         L.DomEvent.stopPropagation(ev);
@@ -1299,14 +1301,19 @@
   const PVGIS_LOSS = 14;
   const CARPORT_TILT_DEG = 10;
   const PERGOLA_TILT_DEG = 22;
-  // ~17% albedo (asphalt/tegels mix) × ~75% BFF, low-tilt mounting.
-  const BIFACIAL_GAIN = 0.06;
-  const PVGIS_LS_PREFIX = 'pvgis:';
+  // 20% albedo (asfalt/tegels mix) × ~75% BFF × geometriefactor, low-tilt mounting.
+  const BIFACIAL_GAIN = 0.07;
+  // v2: previous version cached fallback values (location-independent) on
+  // PVGIS failure, which made all locations show the same yield. Bumping
+  // the prefix discards those stale entries.
+  const PVGIS_LS_PREFIX = 'pvgis:v2:';
 
   let bifacialOn = true;
 
   const yieldCache = new Map();   // key -> kWh/kWp/year (specific yield, monofacial)
   const yieldPending = new Set(); // keys currently being fetched
+  const yieldFailedAt = new Map(); // key -> timestamp of last fetch failure
+  const PVGIS_RETRY_COOLDOWN_MS = 60_000;
 
   function compassToPvgisAspect(azCompass){
     // Compass: 0=N, 90=E, 180=S, 270=W
@@ -1332,14 +1339,23 @@
     22: [895, 870, 825, 750, 695]
   };
 
-  function fallbackSpecificYield(tilt, azCompass){
+  // Lineaire latitude-correctie voor NL (~52° N referentie). Zuidelijker = meer
+  // instraling, noordelijker = minder. ~1.5% per breedtegraad — zo varieert
+  // ook de fallback-yield binnen NL ipv overal hetzelfde getal te zijn.
+  function nlLatitudeFactor(lat){
+    if (typeof lat !== 'number' || !isFinite(lat)) return 1;
+    return 1 + (52.0 - lat) * 0.015;
+  }
+
+  function fallbackSpecificYield(tilt, azCompass, lat){
     const tab = NL_FALLBACK_TABLE[tilt] || NL_FALLBACK_TABLE[10];
     let dev = ((azCompass - 180) % 360 + 360) % 360;
     if (dev > 180) dev = 360 - dev;
     const slot = dev / 45;
     const i = Math.min(3, Math.floor(slot));
     const f = slot - i;
-    return tab[i] * (1 - f) + tab[i+1] * f;
+    const base = tab[i] * (1 - f) + tab[i+1] * f;
+    return base * nlLatitudeFactor(lat);
   }
 
   async function fetchPvgisYield(lat, lon, tilt, azCompass){
@@ -1367,29 +1383,34 @@
       }
     } catch {}
 
-    // Not cached — fetch in background, return the fallback for now.
+    // If this key failed recently, don't hammer PVGIS — return fallback,
+    // retry once the cooldown expires. Crucially we do NOT cache the
+    // fallback long-term, so different locations keep their own variation.
+    const failedAt = yieldFailedAt.get(key);
+    if (failedAt && (Date.now() - failedAt) < PVGIS_RETRY_COOLDOWN_MS){
+      return fallbackSpecificYield(tilt, azCompass, lat);
+    }
+
     if (!yieldPending.has(key)){
       yieldPending.add(key);
       fetchPvgisYield(lat, lon, tilt, azCompass).then(v => {
         yieldCache.set(key, v);
+        yieldFailedAt.delete(key);
         try { localStorage.setItem(PVGIS_LS_PREFIX + key, String(v)); } catch {}
         yieldPending.delete(key);
+        console.log(`[PVGIS] ✓ ${key} → ${v.toFixed(0)} kWh/kWp`);
         updateTotals();
       }).catch((err) => {
-        // PVGIS unreachable (CORS, 4xx/5xx, network) — cache the fallback so
-        // we don't retry on every re-render. The displayed yield stays
-        // accurate-ish and the (berekenen…) indicator clears.
-        const fb = fallbackSpecificYield(tilt, azCompass);
-        yieldCache.set(key, fb);
+        yieldFailedAt.set(key, Date.now());
         yieldPending.delete(key);
         if (!window.__pvgisWarned){
           window.__pvgisWarned = true;
-          console.warn('[PVGIS] kon opbrengstdata niet ophalen, val terug op NL-tabel:', err);
+          console.warn('[PVGIS] eerste fout — val terug op NL-tabel + lat-correctie. Reden:', err);
         }
         updateTotals();
       });
     }
-    return fallbackSpecificYield(tilt, azCompass);
+    return fallbackSpecificYield(tilt, azCompass, lat);
   }
 
   function bifacialMultiplier(){ return bifacialOn ? (1 + BIFACIAL_GAIN) : 1; }
@@ -1503,23 +1524,26 @@
       const cp = carports.get(selectedCarportId);
       const wp = cp.panelType === "small" ? CARPORT_SMALL_PANEL_WP : CARPORT_PANEL_WP;
       const kwh = computeCarportYieldKwh(selectedCarportId);
-      selectedLine = `Carport ${selectedCarportId}: <b>${st.panels}</b> panelen van ${wp}Wp &nbsp;• <b>${st.kwp.toFixed(2)}</b> kWp &nbsp;• <b>${fmtNlInt(kwh)}</b> kWh/jr`;
+      const sp  = st.kwp > 0 ? Math.round(kwh / st.kwp) : 0;
+      selectedLine = `Carport ${selectedCarportId}: <b>${st.panels}</b> panelen van ${wp}Wp &nbsp;• <b>${st.kwp.toFixed(2)}</b> kWp &nbsp;• <b>${fmtNlInt(kwh)}</b> kWh/jr &nbsp;• <b>${sp}</b> kWh/kWp`;
     } else if (selectedPergolaId){
       const st = computePergolaStats(selectedPergolaId);
       const kwh = computePergolaYieldKwh(selectedPergolaId);
-      selectedLine = `Pergola ${selectedPergolaId}: <b>${st.panels}</b> panelen van ${PERG_PANEL_WP}Wp &nbsp;• <b>${st.kwp.toFixed(2)}</b> kWp &nbsp;• <b>${fmtNlInt(kwh)}</b> kWh/jr`;
+      const sp  = st.kwp > 0 ? Math.round(kwh / st.kwp) : 0;
+      selectedLine = `Pergola ${selectedPergolaId}: <b>${st.panels}</b> panelen van ${PERG_PANEL_WP}Wp &nbsp;• <b>${st.kwp.toFixed(2)}</b> kWp &nbsp;• <b>${fmtNlInt(kwh)}</b> kWh/jr &nbsp;• <b>${sp}</b> kWh/kWp`;
     }
 
     const bifNote = bifacialOn
       ? `incl. +${(BIFACIAL_GAIN*100).toFixed(0)}% bifaciaal`
       : `monofaciaal`;
     const pendingNote = yieldPending.size > 0 ? ' <span style="color:#aaa;">(berekenen…)</span>' : '';
+    const totalSpecific = totalKwp > 0 ? Math.round(totalKwh / totalKwp) : 0;
 
     UI.totalsEl.innerHTML = `
       <div style="margin-bottom:6px;">${selectedLine}</div>
       <div><b>${carportCount}</b> carports • <b>${pergolaCount}</b> pergola's</div>
       <div><b>${totalPanels}</b> panelen • <b>${totalKwp.toFixed(2)}</b> kWp</div>
-      <div><b>Schatting opbrengst:</b> ${fmtNlInt(totalKwh)} kWh/jaar${pendingNote}</div>
+      <div><b>Schatting opbrengst:</b> ${fmtNlInt(totalKwh)} kWh/jaar &nbsp;• <b>${totalSpecific}</b> kWh/kWp${pendingNote}</div>
       <div style="font-size:10.5px;color:#888;margin-top:2px;">PVGIS · ${bifNote}</div>
     `;
 
