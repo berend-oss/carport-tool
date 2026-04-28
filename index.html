@@ -1411,8 +1411,11 @@
     // Normalize to [0,180) so left/right perpendicular is stable regardless of draw direction.
     let bn = bearing; if (bn >= 180) bn -= 180;
 
-    const azLeft  = ((bn - 90) + 360) % 360;
-    const azRight = (bn + 90) % 360;
+    // Carport canopy slopes UP from the column line outward (V / butterfly
+    // shape) — the panels face INWARD across the column line, so a "left"
+    // panel actually faces toward the right perpendicular, and vice versa.
+    const azLeft  = (bn + 90) % 360;
+    const azRight = ((bn - 90) + 360) % 360;
     const bif = bifacialMultiplier();
 
     if (cp.sideMode === 'left'){
