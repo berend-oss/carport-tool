@@ -1307,10 +1307,9 @@
   const PERGOLA_TILT_DEG = 22;
   // 20% albedo (asfalt/tegels mix) × ~75% BFF × geometriefactor, low-tilt mounting.
   const BIFACIAL_GAIN = 0.07;
-  // v2: previous version cached fallback values (location-independent) on
-  // PVGIS failure, which made all locations show the same yield. Bumping
-  // the prefix discards those stale entries.
-  const PVGIS_LS_PREFIX = 'pvgis:v2:';
+  // v3: cache key now includes a horizon-fingerprint so locations with
+  // different building/tree-shading horizons don't share PVGIS results.
+  const PVGIS_LS_PREFIX = 'pvgis:v3:';
 
   let bifacialOn = true;
 
@@ -1322,6 +1321,97 @@
   // fallback table instead of a real PVGIS response. Reset at top of
   // updateTotals; checked at the bottom for UI labelling.
   let lastUpdateUsedFallback = false;
+  let lastUpdateHorizonPending = false;
+
+  /* ─── Horizon shading via AHN4 grid-sampling ─────────────────────
+     Per locatie: sample AHN4 op 36 richtingen × 4 afstanden, bereken
+     elevatiehoek t.o.v. carport-paneelhoogte (3.5m boven maaiveld),
+     en lever een 36-element horizon-array op (van noord, kloksgewijs,
+     PVGIS userhorizon-formaat). AHN4 includeert zowel gebouwen als
+     bomen, dus dit vangt de werkelijke schaduw rondom de carport. */
+  const CARPORT_PANEL_HEIGHT_M = 3.5;
+  const HORIZON_DIRECTIONS = 36;                  // every 10°
+  const HORIZON_DISTANCES_M = [10, 25, 50, 100];  // sample radii
+  const HORIZON_LS_PREFIX = 'horizon:v1:';
+
+  const horizonCache = new Map();      // key -> Array<36>
+  const horizonPending = new Set();    // keys currently fetching
+
+  function horizonKey(lat, lon){
+    // ~111m bin — fijn genoeg dat objecten op één terrein dezelfde horizon
+    // delen, grof genoeg om hits te krijgen tussen carports onderling.
+    return `${lat.toFixed(3)}:${lon.toFixed(3)}`;
+  }
+
+  function horizonFingerprint(horizon){
+    // Compact hash voor PVGIS-cache key zodat verschillende horizonnen
+    // niet dezelfde cached PVGIS-waarde delen.
+    return horizon.map(h => Math.round(h)).join('_');
+  }
+
+  async function fetchHorizon(lat, lon){
+    const key = horizonKey(lat, lon);
+    if (horizonCache.has(key)) return horizonCache.get(key);
+    try {
+      const ls = localStorage.getItem(HORIZON_LS_PREFIX + key);
+      if (ls){ const v = JSON.parse(ls); horizonCache.set(key, v); return v; }
+    } catch {}
+
+    // Referentie: maaiveld bij carport + paneel-onderzijde 3.5m
+    const groundH = await ahnGetValue({ lat, lng: lon }).catch(() => null);
+    const refH = (typeof groundH === 'number' ? groundH : 0) + CARPORT_PANEL_HEIGHT_M;
+
+    const horizon = new Array(HORIZON_DIRECTIONS).fill(0);
+    const tasks = [];
+    for (let d = 0; d < HORIZON_DIRECTIONS; d++){
+      const bearing = d * (360 / HORIZON_DIRECTIONS);
+      for (const dist of HORIZON_DISTANCES_M){
+        tasks.push((async () => {
+          const pt = turf.destination(
+            turf.point([lon, lat]), dist, bearing, { units: 'meters' }
+          ).geometry.coordinates;
+          const sampleH = await ahnGetValue({ lat: pt[1], lng: pt[0] }).catch(() => null);
+          if (typeof sampleH !== 'number') return;
+          const aboveRef = sampleH - refH;
+          if (aboveRef <= 0) return;
+          const angle = Math.atan(aboveRef / dist) * 180 / Math.PI;
+          if (angle > horizon[d]) horizon[d] = angle;
+        })());
+      }
+    }
+    await Promise.all(tasks);
+
+    const rounded = horizon.map(h => Math.round(h * 10) / 10);
+    horizonCache.set(key, rounded);
+    try { localStorage.setItem(HORIZON_LS_PREFIX + key, JSON.stringify(rounded)); } catch {}
+    return rounded;
+  }
+
+  function getCachedHorizon(lat, lon){
+    const key = horizonKey(lat, lon);
+    if (horizonCache.has(key)) return horizonCache.get(key);
+    try {
+      const ls = localStorage.getItem(HORIZON_LS_PREFIX + key);
+      if (ls){ const v = JSON.parse(ls); horizonCache.set(key, v); return v; }
+    } catch {}
+    return null;
+  }
+
+  function ensureHorizon(lat, lon){
+    if (getCachedHorizon(lat, lon)) return;
+    const key = horizonKey(lat, lon);
+    if (horizonPending.has(key)) return;
+    horizonPending.add(key);
+    fetchHorizon(lat, lon).then(() => {
+      horizonPending.delete(key);
+      console.log(`[AHN4 horizon] ✓ ${key}`);
+      updateTotals();
+    }).catch((err) => {
+      horizonPending.delete(key);
+      console.warn('[AHN4 horizon] kon niet berekenen:', err);
+      updateTotals();
+    });
+  }
 
   function compassToPvgisAspect(azCompass){
     // Compass: 0=N, 90=E, 180=S, 270=W
@@ -1332,12 +1422,14 @@
     return a;
   }
 
-  function yieldKey(lat, lon, tilt, azCompass){
-    // Round so nearby objects share cache entries (≈11 km grid, 15° az bins).
+  function yieldKey(lat, lon, tilt, azCompass, horizon){
+    // ~11 km grid, 15° az bins. Horizon fingerprint ensures shading data
+    // wordt meegerekend in cache key — verschillende horizonnen = aparte cache.
     const la = lat.toFixed(1);
     const lo = lon.toFixed(1);
     const az = ((Math.round(azCompass / 15) * 15) % 360 + 360) % 360;
-    return `${la}:${lo}:${tilt}:${az}`;
+    const hf = horizon ? horizonFingerprint(horizon) : 'nh';
+    return `${la}:${lo}:${tilt}:${az}:${hf}`;
   }
 
   // NL fallback table (lat 52.0, lon 5.1 — centraal NL, 14% systeemverlies),
@@ -1367,11 +1459,14 @@
     return base * nlLatitudeFactor(lat);
   }
 
-  async function fetchPvgisYield(lat, lon, tilt, azCompass){
+  async function fetchPvgisYield(lat, lon, tilt, azCompass, horizon){
     const aspect = compassToPvgisAspect(azCompass);
-    const pvgisUrl = `${PVGIS_URL}?lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}` +
+    let pvgisUrl = `${PVGIS_URL}?lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}` +
                 `&peakpower=1&loss=${PVGIS_LOSS}&angle=${tilt}&aspect=${aspect}` +
                 `&outputformat=json`;
+    if (horizon && horizon.length){
+      pvgisUrl += `&userhorizon=${horizon.join(',')}`;
+    }
     const url = CORS_PROXY + encodeURIComponent(pvgisUrl);
     const res = await fetch(url);
     if (!res.ok) throw new Error('PVGIS HTTP ' + res.status);
@@ -1382,7 +1477,17 @@
   }
 
   function getSpecificYield(lat, lon, tilt, azCompass){
-    const key = yieldKey(lat, lon, tilt, azCompass);
+    // Eerst horizon (schaduw) zoeken/inkickoffen. Als die nog niet klaar is,
+    // wachten we — fallback wordt gebruikt zonder schaduw mee te rekenen.
+    const horizon = getCachedHorizon(lat, lon);
+    if (!horizon){
+      ensureHorizon(lat, lon);
+      lastUpdateHorizonPending = true;
+      lastUpdateUsedFallback = true;
+      return fallbackSpecificYield(tilt, azCompass, lat);
+    }
+
+    const key = yieldKey(lat, lon, tilt, azCompass, horizon);
     if (yieldCache.has(key)) return yieldCache.get(key);
 
     try {
@@ -1404,7 +1509,7 @@
 
     if (!yieldPending.has(key)){
       yieldPending.add(key);
-      fetchPvgisYield(lat, lon, tilt, azCompass).then(v => {
+      fetchPvgisYield(lat, lon, tilt, azCompass, horizon).then(v => {
         yieldCache.set(key, v);
         yieldFailedAt.delete(key);
         try { localStorage.setItem(PVGIS_LS_PREFIX + key, String(v)); } catch {}
@@ -1511,6 +1616,7 @@
 
   function updateTotals(){
     lastUpdateUsedFallback = false;
+    lastUpdateHorizonPending = false;
     const carportCount = carports.size;
     const pergolaCount = pergolas.size;
 
@@ -1549,17 +1655,19 @@
     const bifNote = bifacialOn
       ? `incl. +${(BIFACIAL_GAIN*100).toFixed(0)}% bifaciaal`
       : `monofaciaal`;
-    const pendingNote = yieldPending.size > 0 ? ' <span style="color:#aaa;">(berekenen…)</span>' : '';
+    const pvgisPendingNote = yieldPending.size > 0 ? ' <span style="color:#aaa;">(berekenen…)</span>' : '';
+    const horizonPendingNote = (lastUpdateHorizonPending || horizonPending.size > 0)
+      ? ' <span style="color:#aaa;">(berekenen schaduw…)</span>' : '';
     const totalSpecific = totalKwp > 0 ? Math.round(totalKwh / totalKwp) : 0;
     const sourceNote = lastUpdateUsedFallback
       ? '<span style="color:#b07000;">NL-tabel (PVGIS niet bereikbaar)</span>'
-      : 'PVGIS';
+      : 'PVGIS + AHN4-schaduw';
 
     UI.totalsEl.innerHTML = `
       <div style="margin-bottom:6px;">${selectedLine}</div>
       <div><b>${carportCount}</b> carports • <b>${pergolaCount}</b> pergola's</div>
       <div><b>${totalPanels}</b> panelen • <b>${totalKwp.toFixed(2)}</b> kWp</div>
-      <div><b>Schatting opbrengst:</b> ${fmtNlInt(totalKwh)} kWh/jaar &nbsp;• <b>${totalSpecific}</b> kWh/kWp${pendingNote}</div>
+      <div><b>Schatting opbrengst:</b> ${fmtNlInt(totalKwh)} kWh/jaar &nbsp;• <b>${totalSpecific}</b> kWh/kWp${pvgisPendingNote}${horizonPendingNote}</div>
       <div style="font-size:10.5px;color:#888;margin-top:2px;">${sourceNote} · ${bifNote}</div>
     `;
 

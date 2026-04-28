@@ -23,7 +23,8 @@
       "WebFetch(domain:www.nationaalgeoregister.nl)",
       "WebFetch(domain:geodata.nationaalgeoregister.nl)",
       "Bash(gh repo *)",
-      "WebFetch(domain:re.jrc.ec.europa.eu)"
+      "WebFetch(domain:re.jrc.ec.europa.eu)",
+      "WebFetch(domain:api.3dbag.nl)"
     ]
   }
 }

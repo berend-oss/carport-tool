@@ -47,14 +47,17 @@ CARPORT_PANEL_WP = 585    CARPORT_SMALL_PANEL_LEN_M = 2.094   CARPORT_SMALL_PANE
 PERG_PANEL_WP = 540       PERG_PANEL_LEN_M = 2.0  PERG_PANEL_WID_M = 1.14
 PERG_PAIR_LEN_M = 4.0     PERG_PAIR_WID_M = 1.14  PERG_EXTRA_THRESHOLD = 0.90
 CARPORT_TILT_DEG = 10     PERGOLA_TILT_DEG = 22   BIFACIAL_GAIN = 0.07
-PVGIS_LOSS = 14
+CARPORT_PANEL_HEIGHT_M = 3.5    PVGIS_LOSS = 14
 ```
 
 ## Yield estimation
-Annual yield is estimated via the PVGIS PVcalc API (`re.jrc.ec.europa.eu/api/v5_2/PVcalc`) per (location, tilt, azimuth). Results are cached in `localStorage` under `pvgis:<lat>:<lon>:<tilt>:<az>`. While a fetch is pending an embedded NL fallback table (`NL_FALLBACK_TABLE`) is used so totals never block; updateTotals is re-called when the real value arrives. Bifacial gain is applied as a flat multiplier (~17% albedo × 75% BFF), toggleable via `bifacialOn`.
+Annual yield is estimated via the PVGIS PVcalc API per (location, tilt, azimuth, horizon). PVGIS calls go through `corsproxy.io` because PVGIS lacks CORS. Results cached in `localStorage` under `pvgis:v3:<lat>:<lon>:<tilt>:<az>:<horizonHash>`. NL fallback table (real PVGIS values for 52°N) used while pending or on failure; bumped to v3 prefix when horizon was added. Bifacial gain ~7% (20% albedo × 75% BFF).
 
-- Carport: panels at 10° tilt, azimuth = bearing ± 90° per side. "both" = half kWp on each perpendicular.
-- Pergola: V-roof at 22°; half kWp at azimuth `bearing`, half at `bearing + 180°`.
+- Carport: panels at 10° tilt; canopy slopes UP from the column line outward (V / butterfly), so panels face INWARD across the column line. `azLeft = bearing+90`, `azRight = bearing-90`.
+- Pergola: V-roof at 22°; half kWp at azimuth `bearing`, half at `bearing+180°`.
+
+## Shading (horizon)
+Each location's horizon is computed by sampling AHN4 DSM (PDOK WMS GetFeatureInfo) on a 36-direction × 4-distance grid (10/25/50/100 m), with reference height = ground + `CARPORT_PANEL_HEIGHT_M` (3.5 m, panel low edge). Per direction the highest elevation angle of any sample wins. The 36-element horizon array is passed to PVGIS via `&userhorizon=...` (N clockwise). Cached in `localStorage` under `horizon:v1:<lat:3>:<lon:3>` (~111 m bins). AHN4 includes buildings + trees, so this captures real-world shading on industrial estates / parking lots without external building datasets.
 
 ## Key functions
 - `rebuildAllPanelsAndOverlaps()` — redraws all panels, overlaps, styles, totals, UI. Call after any structural change.
