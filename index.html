@@ -1375,9 +1375,18 @@
         try { localStorage.setItem(PVGIS_LS_PREFIX + key, String(v)); } catch {}
         yieldPending.delete(key);
         updateTotals();
-      }).catch(() => {
+      }).catch((err) => {
+        // PVGIS unreachable (CORS, 4xx/5xx, network) — cache the fallback so
+        // we don't retry on every re-render. The displayed yield stays
+        // accurate-ish and the (berekenen…) indicator clears.
+        const fb = fallbackSpecificYield(tilt, azCompass);
+        yieldCache.set(key, fb);
         yieldPending.delete(key);
-        // Silent: fallback was already returned.
+        if (!window.__pvgisWarned){
+          window.__pvgisWarned = true;
+          console.warn('[PVGIS] kon opbrengstdata niet ophalen, val terug op NL-tabel:', err);
+        }
+        updateTotals();
       });
     }
     return fallbackSpecificYield(tilt, azCompass);
