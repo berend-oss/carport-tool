@@ -222,80 +222,10 @@
     .help-kbd { background:#f0f0f0;border:1px solid #ccc;border-radius:3px;padding:1px 6px;font-size:11px;font-family:monospace;color:#333; }
     .help-note { background:#f0f4ff;border-left:3px solid #1f4f99;border-radius:0 6px 6px 0;padding:8px 12px;font-size:12px;color:#333;margin:8px 0; }
     @media(max-width:500px){ .help-bx{margin:0;border-radius:0;min-height:100vh} .help-row{flex-direction:column} }
-
-    /* ── Login overlay ──────────────────────────────── */
-    .login-ov {
-      position: fixed; inset: 0; z-index: 20000;
-      background: linear-gradient(135deg, #1f4f99 0%, #2b6fd1 100%);
-      display: flex; align-items: center; justify-content: center;
-    }
-    .login-bx {
-      background: #fff; border-radius: 16px; padding: 32px 36px;
-      box-shadow: 0 20px 50px rgba(0,0,0,.28);
-      width: 100%; max-width: 340px; text-align: center;
-    }
-    .login-h1 { font-size: 18px; font-weight: 800; margin: 0 0 4px; color: #111; }
-    .login-sub { font-size: 12px; color: #666; margin: 0 0 20px; }
-    .login-bx input[type="password"] {
-      width: 100%; box-sizing: border-box;
-      padding: 11px 14px; font-size: 15px;
-      border: 1px solid #c8d0dc; border-radius: 10px;
-      outline: none; margin-bottom: 10px;
-      transition: border-color .15s, box-shadow .15s;
-    }
-    .login-bx input[type="password"]:focus { border-color: #1f4f99; box-shadow: 0 0 0 3px rgba(31,79,153,.18); }
-    .login-bx button {
-      width: 100%; padding: 11px 14px; font-size: 14px; font-weight: 700;
-      background: #1f4f99; color: #fff; border: none; border-radius: 10px;
-      cursor: pointer; transition: background .15s;
-    }
-    .login-bx button:hover { background: #1b4586; }
-    .login-err { font-size: 12px; color: #c0392b; min-height: 16px; margin-top: 8px; }
   </style>
 </head>
 <body>
 
-<!-- ══════════════════ LOGIN OVERLAY ══════════════════ -->
-<div id="loginOverlay" class="login-ov">
-  <form id="loginForm" class="login-bx" autocomplete="off">
-    <div class="login-h1">☀️ Solar Carport Tool</div>
-    <div class="login-sub">Voer het wachtwoord in om verder te gaan</div>
-    <input id="loginPw" type="password" placeholder="Wachtwoord" autofocus />
-    <button type="submit">Inloggen</button>
-    <div id="loginErr" class="login-err"></div>
-  </form>
-</div>
-
-<script>
-  (function () {
-    var ov = document.getElementById('loginOverlay');
-    var form = document.getElementById('loginForm');
-    var pw = document.getElementById('loginPw');
-    var err = document.getElementById('loginErr');
-    var PASSWORD = '1411AL';
-    var KEY = 'carport-tool-auth-v1';
-
-    if (sessionStorage.getItem(KEY) === '1') {
-      ov.style.display = 'none';
-      return;
-    }
-
-    form.addEventListener('submit', function (e) {
-      e.preventDefault();
-      if (pw.value === PASSWORD) {
-        sessionStorage.setItem(KEY, '1');
-        ov.style.display = 'none';
-        if (window.map && typeof window.map.invalidateSize === 'function') {
-          window.map.invalidateSize();
-        }
-      } else {
-        err.textContent = 'Onjuist wachtwoord';
-        pw.value = '';
-        pw.focus();
-      }
-    });
-  })();
-</script>
 
 <div id="map"></div>
 
